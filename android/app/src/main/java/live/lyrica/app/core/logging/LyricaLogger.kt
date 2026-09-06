@@ -31,27 +31,49 @@ object LyricaLogger {
 
     fun d(tag: String, message: String) {
         if (isDebugEnabled) {
-            Log.d("Lyrica::$tag", redact(message))
+            val red = redact(message)
+            try {
+                Log.d("Lyrica::$tag", red)
+            } catch (_: RuntimeException) {
+                println("[DEBUG] Lyrica::$tag: $red")
+            }
         }
     }
 
     fun i(tag: String, message: String) {
-        Log.i("Lyrica::$tag", redact(message))
+        val red = redact(message)
+        try {
+            Log.i("Lyrica::$tag", red)
+        } catch (_: RuntimeException) {
+            println("[INFO] Lyrica::$tag: $red")
+        }
     }
 
     fun w(tag: String, message: String, throwable: Throwable? = null) {
-        if (throwable != null) {
-            Log.w("Lyrica::$tag", redact(message), throwable)
-        } else {
-            Log.w("Lyrica::$tag", redact(message))
+        val red = redact(message)
+        try {
+            if (throwable != null) {
+                Log.w("Lyrica::$tag", red, throwable)
+            } else {
+                Log.w("Lyrica::$tag", red)
+            }
+        } catch (_: RuntimeException) {
+            println("[WARN] Lyrica::$tag: $red")
+            throwable?.printStackTrace()
         }
     }
 
     fun e(tag: String, message: String, throwable: Throwable? = null) {
-        if (throwable != null) {
-            Log.e("Lyrica::$tag", redact(message), throwable)
-        } else {
-            Log.e("Lyrica::$tag", redact(message))
+        val red = redact(message)
+        try {
+            if (throwable != null) {
+                Log.e("Lyrica::$tag", red, throwable)
+            } else {
+                Log.e("Lyrica::$tag", red)
+            }
+        } catch (_: RuntimeException) {
+            System.err.println("[ERROR] Lyrica::$tag: $red")
+            throwable?.printStackTrace()
         }
     }
 }
