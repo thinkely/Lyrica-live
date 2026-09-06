@@ -1,0 +1,77 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Background circle with indigo gradient effect -->
+    <path
+        android:fillColor="#1A1033"
+        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
+
+    <!-- Outer soft glow ring -->
+    <path
+        android:fillColor="#3F51B5"
+        android:fillAlpha="0.15"
+        android:pathData="M54,8 A46,46 0 1,1 53.99,8 Z" />
+
+    <!-- Music note / waveform bars — lyric sync visual -->
+    <!-- Bar 1 (short) -->
+    <path
+        android:fillColor="#7C3AED"
+        android:pathData="M28,58 L32,58 L32,72 L28,72 Z"
+        android:strokeWidth="0" />
+    <!-- Bar 2 (tall) -->
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M35,44 L39,44 L39,72 L35,72 Z"
+        android:strokeWidth="0" />
+    <!-- Bar 3 (medium) -->
+    <path
+        android:fillColor="#A78BFA"
+        android:pathData="M42,50 L46,50 L46,72 L42,72 Z"
+        android:strokeWidth="0" />
+    <!-- Bar 4 (tallest — center) -->
+    <path
+        android:fillColor="#C4B5FD"
+        android:pathData="M49,36 L53,36 L53,72 L49,72 Z"
+        android:strokeWidth="0" />
+    <!-- Bar 5 (medium) -->
+    <path
+        android:fillColor="#A78BFA"
+        android:pathData="M56,50 L60,50 L60,72 L56,72 Z"
+        android:strokeWidth="0" />
+    <!-- Bar 6 (tall) -->
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M63,44 L67,44 L67,72 L63,72 Z"
+        android:strokeWidth="0" />
+    <!-- Bar 7 (short) -->
+    <path
+        android:fillColor="#7C3AED"
+        android:pathData="M70,58 L74,58 L74,72 L70,72 Z"
+        android:strokeWidth="0" />
+    <!-- Bar 8 (tiny) -->
+    <path
+        android:fillColor="#6D28D9"
+        android:pathData="M77,64 L81,64 L81,72 L77,72 Z"
+        android:strokeWidth="0" />
+
+    <!-- Lyric text lines (representing synchronized lyrics) -->
+    <!-- Line 1 (short) -->
+    <path
+        android:fillColor="#E0D7FF"
+        android:fillAlpha="0.9"
+        android:pathData="M28,80 Q52,78 80,80 Q52,82 28,80 Z" />
+    <!-- Line 2 (longer, active — glowing) -->
+    <path
+        android:fillColor="#A78BFA"
+        android:fillAlpha="1.0"
+        android:pathData="M22,87 Q54,84 86,87 Q54,90 22,87 Z" />
+    <!-- Line 3 (short) -->
+    <path
+        android:fillColor="#E0D7FF"
+        android:fillAlpha="0.5"
+        android:pathData="M30,94 Q54,92 78,94 Q54,96 30,94 Z" />
+
+</vector>

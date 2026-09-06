@@ -1,6 +1,5 @@
 package live.lyrica.app.ui
 
-import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -45,6 +44,9 @@ class MainActivity : ComponentActivity() {
                     },
                     onOpenFullLyrics = {
                         startActivity(Intent(this, FullLyricsActivity::class.java))
+                    },
+                    onOpenDebugLogs = {
+                        startActivity(Intent(this, DebugLogActivity::class.java))
                     }
                 )
             }
@@ -57,7 +59,8 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(
     secureStorage: SecureTokenStorage,
     onOpenSettings: () -> Unit,
-    onOpenFullLyrics: () -> Unit
+    onOpenFullLyrics: () -> Unit,
+    onOpenDebugLogs: () -> Unit
 ) {
     val isConnected by LyricaMediaSessionListenerService.isServiceConnectedFlow.collectAsState()
     val track by LyricaMediaSessionListenerService.currentTrackFlow.collectAsState()
@@ -182,9 +185,9 @@ fun MainScreen(
 
                         AnimatedVisibility(visible = showPermissionSteps) {
                             Column(modifier = Modifier.padding(top = 4.dp)) {
-                                PermissionStep(number = "1", text = "Tap "Grant Permission" below")
-                                PermissionStep(number = "2", text = "Find "Lyrica Live" in the list")
-                                PermissionStep(number = "3", text = "Toggle the switch — then press Back")
+                                PermissionStep(number = "1", text = "Tap 'Grant Permission' below")
+                                PermissionStep(number = "2", text = "Find 'Lyrica Live' in the list")
+                                PermissionStep(number = "3", text = "Toggle the switch, then press Back")
                             }
                         }
 
@@ -265,9 +268,10 @@ fun MainScreen(
                                     color = if (syncState.currentLine != null) ActiveLyricHighlight else TextSecondaryDark
                                 )
                                 lyricsDoc?.provider?.let { provider ->
+                                    val precisionLabel = lyricsDoc!!.syncPrecision.name.lowercase()
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "via ${provider.uppercase()}  •  ${lyricsDoc!!.syncPrecision?.lowercase() ?: "line"} sync",
+                                        text = "via ${provider.uppercase()}  •  $precisionLabel sync",
                                         fontSize = 11.sp,
                                         color = TextSecondaryDark
                                     )
@@ -428,6 +432,38 @@ fun MainScreen(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ── Debug Logs (DEV ONLY) ──────────────────────────────────────
+            OutlinedButton(
+                onClick = onOpenDebugLogs,
+                shape = RoundedCornerShape(10.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF374151)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Default.BugReport,
+                    contentDescription = null,
+                    tint = Color(0xFF6B7280),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "View Debug Logs",
+                    color = Color(0xFF6B7280),
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Debug log viewer is for testing only and will be removed in release builds.",
+                fontSize = 10.sp,
+                color = TextMutedDark.copy(alpha = 0.5f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

@@ -7,9 +7,9 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/ic_lyrics_notification"
+        android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_lyrics_notification"
+        android:roundIcon="@drawable/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.LyricaLive">
 
@@ -25,6 +25,12 @@
 
         <activity
             android:name=".ui.FullLyricsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.LyricaLive" />
+
+        <!-- Debug log viewer — remove in production builds -->
+        <activity
+            android:name=".ui.DebugLogActivity"
             android:exported="false"
             android:theme="@style/Theme.LyricaLive" />
 
