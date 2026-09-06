@@ -36,32 +36,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install httpx==0.28.1 tenacity==8.3.0
 
-      - name: Cache Gradle Packages
-        uses: actions/cache@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          gradle-version: '8.6'
 
       - name: Run Embedded Python Unit Tests
         run: |
           python -m unittest discover -s android/app/src/main/python/tests
 
-      - name: Make Gradlew Executable
-        run: chmod +x android/gradlew
-
       - name: Run Android Unit Tests
         run: |
           cd android
-          ./gradlew testDebugUnitTest --no-daemon
+          gradle testDebugUnitTest --no-daemon
 
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
