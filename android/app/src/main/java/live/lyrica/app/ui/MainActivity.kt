@@ -6,6 +6,9 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -19,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,10 +63,14 @@ fun MainScreen(
     val track by LyricaMediaSessionListenerService.currentTrackFlow.collectAsState()
     val lyricsDoc by LyricaMediaSessionListenerService.currentLyricsFlow.collectAsState()
     val syncState by LyricaMediaSessionListenerService.syncStateFlow.collectAsState()
+    val searchStatus by LyricaMediaSessionListenerService.searchStatusFlow.collectAsState()
 
     var geniusToken by remember { mutableStateOf(secureStorage.getString("genius_token") ?: "") }
     var appleDevToken by remember { mutableStateOf(secureStorage.getString("apple_developer_token") ?: "") }
     var hostedUrl by remember { mutableStateOf(secureStorage.getString("hosted_url") ?: "") }
+    var wordLevelSync by remember { mutableStateOf(secureStorage.getBoolean("word_level_sync", true)) }
+
+    var showPermissionSteps by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -83,7 +89,7 @@ fun MainScreen(
                             color = PrimaryIndigo.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = "v1.0",
+                                text = "v1.1",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = PrimaryIndigoLight,
@@ -104,45 +110,108 @@ fun MainScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp)
         ) {
-            // ── 1. Notification Access Permission Card ─────────────────────
-            if (!isConnected) {
+            // ── 1. Permission Onboarding Card ──────────────────────────────
+            AnimatedVisibility(
+                visible = !isConnected,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceVariantDark),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2D1F0A)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
+                        // Header row
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFFBBF24))
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFFBBF24).copy(alpha = 0.15f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFBBF24),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "One-time Permission Needed",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFBBF24),
+                                    fontSize = 15.sp
+                                )
+                                Text(
+                                    text = "Required to read currently playing music",
+                                    color = TextMutedDark,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Lyrica Live uses Android's Notification Access to detect what music you're playing " +
+                                    "in Spotify, YouTube Music, or any other player. " +
+                                    "Your music data never leaves your phone.",
+                            color = TextSecondaryDark,
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Expandable how-to steps
+                        TextButton(
+                            onClick = { showPermissionSteps = !showPermissionSteps },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
                             Text(
-                                text = "Notification Access Required",
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimaryDark,
-                                fontSize = 15.sp
+                                text = if (showPermissionSteps) "Hide steps ▲" else "How to grant it ▼",
+                                color = PrimaryIndigoLight,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Lyrica Live needs Notification Access permission to monitor Android MediaSessions and detect playing music.",
-                            color = TextSecondaryDark,
-                            fontSize = 13.sp
-                        )
+
+                        AnimatedVisibility(visible = showPermissionSteps) {
+                            Column(modifier = Modifier.padding(top = 4.dp)) {
+                                PermissionStep(number = "1", text = "Tap "Grant Permission" below")
+                                PermissionStep(number = "2", text = "Find "Lyrica Live" in the list")
+                                PermissionStep(number = "3", text = "Toggle the switch — then press Back")
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(14.dp))
+
                         Button(
                             onClick = onOpenSettings,
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFBBF24)),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Grant Permission", fontWeight = FontWeight.SemiBold)
+                            Icon(
+                                Icons.Default.OpenInNew,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Grant Permission", fontWeight = FontWeight.Bold, color = Color.Black)
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // ── 2. Now Playing & Live Lyric Card ───────────────────────────
+            if (!isConnected) Spacer(modifier = Modifier.height(16.dp))
+
+            // ── 2. Now Playing & Live Lyric Card ────────────────────────────
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = SurfaceDark),
@@ -183,17 +252,22 @@ fun MainScreen(
                         ) {
                             Column {
                                 val currentText = syncState.currentLine?.text
-                                    ?: if (lyricsDoc != null && lyricsDoc!!.isSynced) "♪ Waiting for line ♪" else "♪ Synchronized Lyrics ♪"
+                                    ?: when (searchStatus) {
+                                        "searching" -> "Searching in LRCLIB & LRCMux..."
+                                        "not_found" -> "No synced lyrics found"
+                                        "found" -> "♪ Waiting for line ♪"
+                                        else -> if (lyricsDoc != null) "♪ Waiting for line ♪" else "♪ Start playing music ♪"
+                                    }
                                 Text(
                                     text = currentText,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = ActiveLyricHighlight
+                                    color = if (syncState.currentLine != null) ActiveLyricHighlight else TextSecondaryDark
                                 )
                                 lyricsDoc?.provider?.let { provider ->
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Source: ${provider.uppercase()}",
+                                        text = "via ${provider.uppercase()}  •  ${lyricsDoc!!.syncPrecision?.lowercase() ?: "line"} sync",
                                         fontSize = 11.sp,
                                         color = TextSecondaryDark
                                     )
@@ -204,23 +278,23 @@ fun MainScreen(
                         Spacer(modifier = Modifier.height(14.dp))
                         Button(
                             onClick = onOpenFullLyrics,
-                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceVariantDark),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Fullscreen, contentDescription = null, tint = TextPrimaryDark)
+                            Icon(Icons.Default.Fullscreen, contentDescription = null, tint = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Open Full Lyrics", color = TextPrimaryDark)
+                            Text("Open Full Lyrics", color = Color.White, fontWeight = FontWeight.SemiBold)
                         }
                     } else {
                         Text(
-                            text = "No active music playback detected.",
+                            text = if (isConnected) "No active music playback detected." else "Waiting for permission...",
                             fontSize = 14.sp,
                             color = TextSecondaryDark
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Start playing music in Spotify, Apple Music, YouTube Music, or any media player.",
+                            text = "Start playing music in Spotify, YouTube Music, or any media player.",
                             fontSize = 12.sp,
                             color = TextMutedDark
                         )
@@ -228,9 +302,9 @@ fun MainScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // ── 3. Provider Settings & API Keys ────────────────────────────
+            // ── 3. Lyrics Preferences ─────────────────────────────────────
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = SurfaceDark),
@@ -238,13 +312,70 @@ fun MainScreen(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
-                        text = "PROVIDER CREDENTIALS (STORED LOCALLY)",
+                        text = "LYRICS PREFERENCES",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryIndigoLight,
                         letterSpacing = 1.sp
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Word-level sync",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimaryDark
+                            )
+                            Text(
+                                text = "Highlights individual words as they're sung (LRCMux only)",
+                                fontSize = 12.sp,
+                                color = TextMutedDark
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = wordLevelSync,
+                            onCheckedChange = {
+                                wordLevelSync = it
+                                secureStorage.putBoolean("word_level_sync", it)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = PrimaryIndigo
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ── 4. Provider Credentials ────────────────────────────────────
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "OPTIONAL API KEYS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryIndigoLight,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "LRCLIB and LRCMux work without any keys. Add these only if you need additional sources.",
+                        fontSize = 12.sp,
+                        color = TextMutedDark,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                    )
 
                     OutlinedTextField(
                         value = geniusToken,
@@ -252,7 +383,7 @@ fun MainScreen(
                             geniusToken = it
                             secureStorage.putString("genius_token", it.trim())
                         },
-                        label = { Text("Genius API Client Token (Optional)") },
+                        label = { Text("Genius API Client Token") },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = PrimaryIndigo,
@@ -269,7 +400,7 @@ fun MainScreen(
                             appleDevToken = it
                             secureStorage.putString("apple_developer_token", it.trim())
                         },
-                        label = { Text("Apple Music Developer Token (Optional)") },
+                        label = { Text("Apple Music Developer Token") },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = PrimaryIndigo,
@@ -298,5 +429,37 @@ fun MainScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * A numbered step row for the permission onboarding guide.
+ */
+@Composable
+private fun PermissionStep(number: String, text: String) {
+    Row(
+        modifier = Modifier.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = PrimaryIndigo.copy(alpha = 0.2f),
+            modifier = Modifier.size(24.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = number,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryIndigoLight
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = text,
+            fontSize = 13.sp,
+            color = TextSecondaryDark
+        )
     }
 }

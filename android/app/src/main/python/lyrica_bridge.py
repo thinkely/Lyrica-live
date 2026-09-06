@@ -47,16 +47,19 @@ async def _async_fetch_single_provider(
     song: str,
     album: str | None,
     duration: int | None,
-    credentials: dict
+    credentials: dict,
+    word_level: bool = True
 ) -> dict | None:
     fetcher = _FETCHERS.get(provider_name.lower())
     if not fetcher:
         return None
 
     if provider_name == "lrclib":
+        # Always request synced (timed) lyrics only; never plain-text fallback
         return await fetcher.fetch(artist, song, timestamps=True, album=album, duration=duration)
     elif provider_name == "lrcmux":
-        return await fetcher.fetch(artist, song, timestamps=True, word_level=True)
+        # Pass word_level preference from user settings
+        return await fetcher.fetch(artist, song, timestamps=True, word_level=word_level)
     elif provider_name == "genius":
         token = credentials.get("genius_token")
         return await fetcher.fetch(artist, song, token=token)
@@ -83,11 +86,22 @@ def fetch_lyrics(
     album: str | None = None,
     duration_ms: int | None = None,
     provider_name: str = "lrclib",
-    credentials_json: str = "{}"
+    credentials_json: str = "{}",
+    word_level: bool = True
 ) -> str:
     """
     Fetch lyrics for a track from a specific provider.
+    Only returns synced (timed) lyrics — plain-text results are rejected.
     Returns JSON string of the standardized LyricsDocument or JSON error object.
+
+    Args:
+        artist: Artist name
+        song: Track title
+        album: Album name (optional, improves matching)
+        duration_ms: Track duration in milliseconds (optional, improves matching)
+        provider_name: Which provider to use ('lrclib', 'lrcmux', etc.)
+        credentials_json: JSON string of provider credentials
+        word_level: Whether to request word-level sync from providers that support it (LRCMux)
     """
     if not artist or not song:
         return json.dumps({"status": "error", "message": "Missing artist or song"})
@@ -101,11 +115,19 @@ def fetch_lyrics(
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         result = loop.run_until_complete(
-            _async_fetch_single_provider(provider_name, artist, song, album, duration_ms, credentials)
+            _async_fetch_single_provider(provider_name, artist, song, album, duration_ms, credentials, word_level)
         )
         loop.close()
 
         if result:
+            # Reject plain-text-only results — we only want synced lyrics
+            timed = result.get("timed_lyrics") or []
+            if not timed:
+                return json.dumps({
+                    "status": "not_found",
+                    "provider": provider_name,
+                    "message": f"No synced lyrics found for {artist} - {song} (plain text omitted)"
+                })
             result["status"] = "success"
             return json.dumps(result)
         else:

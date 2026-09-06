@@ -1,6 +1,5 @@
 package live.lyrica.app.core.mediasession
 
-import android.content.ComponentName
 import android.content.Context
 import android.media.MediaMetadata
 import android.media.session.MediaController
@@ -27,6 +26,12 @@ class MediaSessionMonitor(private val context: Context) {
 
     private val listeners = mutableListOf<Listener>()
     private var activeController: MediaController? = null
+
+    /**
+     * The stable key of the last track reported to listeners.
+     * Cleared to null when a session is destroyed so that the same track resuming
+     * in a new session is correctly treated as a new track event.
+     */
     private var lastTrackKey: String? = null
     private var isPlaying: Boolean = false
     private var lastReportedPositionMs: Long = 0L
@@ -66,7 +71,12 @@ class MediaSessionMonitor(private val context: Context) {
         override fun onSessionDestroyed() {
             super.onSessionDestroyed()
             LyricaLogger.i(TAG, "Active MediaSession destroyed: ${activeController?.packageName}")
+            activeController?.unregisterCallback(this)
             activeController = null
+            // ── Clear lastTrackKey so the same track resuming in a new session
+            //    is correctly treated as a fresh track-change event. ──────────
+            lastTrackKey = null
+            isPlaying = false
             stopTicker()
             listeners.forEach { it.onSessionDisconnected() }
         }
@@ -83,6 +93,8 @@ class MediaSessionMonitor(private val context: Context) {
         } else if (candidate == null && activeController != null) {
             activeController?.unregisterCallback(callback)
             activeController = null
+            lastTrackKey = null
+            isPlaying = false
             stopTicker()
             listeners.forEach { it.onSessionDisconnected() }
         }
@@ -124,7 +136,7 @@ class MediaSessionMonitor(private val context: Context) {
         // Only notify when track identity meaningfully changes (stableKey)
         if (track.stableKey != lastTrackKey) {
             lastTrackKey = track.stableKey
-            LyricaLogger.i(TAG, "Track changed meaningfully: '${track.normalizedArtist} - ${track.normalizedTitle}' (key=${track.stableKey})")
+            LyricaLogger.i(TAG, "Track changed: '${track.normalizedArtist} - ${track.normalizedTitle}' (key=${track.stableKey})")
             listeners.forEach { it.onTrackChanged(track) }
         }
     }

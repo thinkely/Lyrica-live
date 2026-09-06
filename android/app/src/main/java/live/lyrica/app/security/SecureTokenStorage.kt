@@ -135,4 +135,13 @@ class SecureTokenStorage(private val context: Context) {
     fun remove(key: String) {
         prefs.edit().remove(key).apply()
     }
+
+    // ── Plain boolean helpers (for non-sensitive preferences) ─────────────
+    fun putBoolean(key: String, value: Boolean) {
+        prefs.edit().putBoolean(key, value).apply()
+    }
+
+    fun getBoolean(key: String, default: Boolean = false): Boolean {
+        return prefs.getBoolean(key, default)
+    }
 }

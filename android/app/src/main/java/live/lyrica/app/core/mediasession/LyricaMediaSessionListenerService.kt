@@ -7,10 +7,12 @@ import android.media.session.MediaSessionManager
 import android.service.notification.NotificationListenerService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import live.lyrica.app.core.cache.LocalLyricsCache
 import live.lyrica.app.core.engine.LyricsSyncEngine
@@ -52,9 +54,16 @@ class LyricaMediaSessionListenerService : NotificationListenerService(), MediaSe
 
         private val _isServiceConnectedFlow = MutableStateFlow(false)
         val isServiceConnectedFlow = _isServiceConnectedFlow.asStateFlow()
+
+        // Lyrics search status emitted to UI
+        private val _searchStatusFlow = MutableStateFlow<String?>(null)
+        val searchStatusFlow = _searchStatusFlow.asStateFlow()
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** Tracks the currently active lyrics-fetch job so it can be cancelled on track change. */
+    private var currentFetchJob: Job? = null
 
     lateinit var mediaSessionMonitor: MediaSessionMonitor
         private set
@@ -132,13 +141,27 @@ class LyricaMediaSessionListenerService : NotificationListenerService(), MediaSe
     }
 
     override fun onTrackChanged(track: NormalizedTrack) {
+        // ── Cancel any in-flight fetch from the previous song ──────────────
+        currentFetchJob?.cancel()
+        LyricaLogger.i(TAG, "Track changed → cancelling any previous fetch. New track: '${track.rawArtist} - ${track.rawTitle}'")
+
         _currentTrackFlow.value = track
         _currentLyricsFlow.value = null
         _syncStateFlow.value = SyncState()
+        _searchStatusFlow.value = "searching"
 
-        serviceScope.launch {
-            val lyrics = providerRouter.resolveLyrics(track)
+        currentFetchJob = serviceScope.launch {
+            val wordLevel = secureStorage.getBoolean("word_level_sync", true)
+            val lyrics = providerRouter.resolveLyrics(track, wordLevel = wordLevel)
+
+            // Guard: if this job was cancelled (new track arrived), do not update state
+            if (!isActive) {
+                LyricaLogger.d(TAG, "Fetch job cancelled — discarding stale result for '${track.rawTitle}'")
+                return@launch
+            }
+
             _currentLyricsFlow.value = lyrics
+            _searchStatusFlow.value = if (lyrics != null) "found" else "not_found"
 
             // Show initial notification
             notificationManager.showOrUpdateLyricsNotification(
@@ -187,17 +210,21 @@ class LyricaMediaSessionListenerService : NotificationListenerService(), MediaSe
     }
 
     override fun onSessionDisconnected() {
+        currentFetchJob?.cancel()
+        currentFetchJob = null
         notificationManager.cancelNotification()
         _currentTrackFlow.value = null
         _currentLyricsFlow.value = null
         _syncStateFlow.value = SyncState()
         _isPlayingFlow.value = false
+        _searchStatusFlow.value = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
         instance = null
         _isServiceConnectedFlow.value = false
+        currentFetchJob?.cancel()
         mediaSessionMonitor.removeListener(this)
         try {
             sessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener)

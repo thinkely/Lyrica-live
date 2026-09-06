@@ -37,7 +37,8 @@ class PythonBridge(private val context: Context? = null) {
         song: String,
         album: String? = null,
         durationMs: Long? = null,
-        credentialsJson: String = "{}"
+        credentialsJson: String = "{}",
+        wordLevel: Boolean = true
     ): LyricsDocument? = withContext(Dispatchers.IO) {
         try {
             ensurePythonStarted()
@@ -50,7 +51,7 @@ class PythonBridge(private val context: Context? = null) {
             val bridgeModule = py.getModule("lyrica_bridge")
 
             val startTime = System.currentTimeMillis()
-            LyricaLogger.d(TAG, "Calling Python provider '$providerName' for '$artist - $song'")
+            LyricaLogger.d(TAG, "Calling Python provider '$providerName' for '$artist - $song' (wordLevel=$wordLevel)")
 
             val resultPy = bridgeModule.callAttr(
                 "fetch_lyrics",
@@ -59,7 +60,8 @@ class PythonBridge(private val context: Context? = null) {
                 album,
                 durationMs?.toInt(),
                 providerName,
-                credentialsJson
+                credentialsJson,
+                wordLevel
             )
 
             val elapsed = System.currentTimeMillis() - startTime

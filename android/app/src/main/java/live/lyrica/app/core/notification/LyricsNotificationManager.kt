@@ -55,16 +55,30 @@ class LyricsNotificationManager(private val context: Context) {
             val title = if (track.rawTitle.isNotBlank()) track.rawTitle else "Lyrica Live"
             val artist = if (track.rawArtist.isNotBlank()) track.rawArtist else "Now Playing"
 
-            val currentLyricText = syncState.currentLine?.text
-                ?: if (lyricsDoc != null && lyricsDoc.isSynced) {
-                    syncState.nextLine?.let { "Upcoming: ${it.text}" } ?: "♪ ... ♪"
-                } else if (lyricsDoc != null && lyricsDoc.plainLyrics.isNotBlank()) {
-                    lyricsDoc.plainLyrics.lines().firstOrNull { it.isNotBlank() } ?: "♪ Lyrica Live ♪"
-                } else {
-                    "Searching synchronized lyrics..."
-                }
+            // ── Resolve the content text shown on the notification ─────────
+            // Priority: active synced line → status text (no curly-quotes on status)
+            val currentLyricText: String
+            val isActualLyric: Boolean
 
-            val nextLyricText = syncState.nextLine?.text
+            val activeLine = syncState.currentLine?.text?.takeIf { it.isNotBlank() }
+            if (activeLine != null) {
+                currentLyricText = activeLine
+                isActualLyric = true
+            } else if (lyricsDoc != null && lyricsDoc.isSynced) {
+                // Lyrics loaded but position is between lines
+                currentLyricText = syncState.nextLine?.text?.let { "♪  $it" } ?: "♪  ..."
+                isActualLyric = false
+            } else if (lyricsDoc != null) {
+                // Lyrics loaded but no synced lines — shouldn't happen with new gate, but safe fallback
+                currentLyricText = "♪  Synchronized lyrics loaded"
+                isActualLyric = false
+            } else {
+                // Still searching
+                currentLyricText = "Searching synchronized lyrics..."
+                isActualLyric = false
+            }
+
+            val nextLyricText = syncState.nextLine?.text?.takeIf { it.isNotBlank() }
 
             val openIntent = Intent(context, FullLyricsActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -89,7 +103,7 @@ class LyricsNotificationManager(private val context: Context) {
 
             val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_lyrics_notification)
-                .setContentTitle("$title • $artist")
+                .setContentTitle("$title  •  $artist")
                 .setContentText(currentLyricText)
                 .setContentIntent(contentPendingIntent)
                 .setOngoing(isPlaying)
@@ -98,14 +112,21 @@ class LyricsNotificationManager(private val context: Context) {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
 
-            // Expanded style
+            // ── Expanded BigText style ─────────────────────────────────────
+            // Only wrap actual lyric lines in decorative quotes, not status messages
             val bigTextStyle = NotificationCompat.BigTextStyle()
-                .setBigContentTitle("$title • $artist")
+                .setBigContentTitle("$title  •  $artist")
                 .bigText(
                     buildString {
-                        append("“").append(currentLyricText).append("”")
+                        if (isActualLyric) {
+                            // Real lyric line — show with decorative quotes
+                            append("\u201c").append(currentLyricText).append("\u201d")
+                        } else {
+                            // Status message — no quotes
+                            append(currentLyricText)
+                        }
                         if (!nextLyricText.isNullOrBlank()) {
-                            append("\n\nNext: ").append(nextLyricText)
+                            append("\n\nNext:  ").append(nextLyricText)
                         }
                         lyricsDoc?.let {
                             append("\n[via ${it.provider.uppercase()}]")
@@ -121,7 +142,7 @@ class LyricsNotificationManager(private val context: Context) {
                 playPausePendingIntent
             )
 
-            // If seek is supported and next line is available, add a quick seek action to next line
+            // If seek is supported and next line is available, add a quick seek action
             if (canSeek && syncState.nextLine != null) {
                 val seekIntent = Intent(context, LyricaMediaSessionListenerService::class.java).apply {
                     action = "live.lyrica.app.ACTION_SEEK"
@@ -133,7 +154,7 @@ class LyricsNotificationManager(private val context: Context) {
                     seekIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-                builder.addAction(R.drawable.ic_seek_forward, "Skip to next line", seekPendingIntent)
+                builder.addAction(R.drawable.ic_seek_forward, "Next line", seekPendingIntent)
             }
 
             notificationManager.notify(NOTIFICATION_ID, builder.build())

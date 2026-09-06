@@ -62,14 +62,33 @@ fun FullLyricsScreen(
     val lyricsDoc by LyricaMediaSessionListenerService.currentLyricsFlow.collectAsState()
     val syncState by LyricaMediaSessionListenerService.syncStateFlow.collectAsState()
     val isPlaying by LyricaMediaSessionListenerService.isPlayingFlow.collectAsState()
-    val positionMs by LyricaMediaSessionListenerService.playbackPositionFlow.collectAsState()
 
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Smooth auto-scroll to current lyric line
+    // ── User-scroll detection ──────────────────────────────────────────────
+    // Track the last time the user manually scrolled the list. Auto-scroll is
+    // suppressed for AUTO_SCROLL_PAUSE_MS milliseconds after any user interaction,
+    // then resumes automatically.
+    val AUTO_SCROLL_PAUSE_MS = 5000L
+    var lastUserScrollTimeMs by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            lastUserScrollTimeMs = System.currentTimeMillis()
+        }
+    }
+
+    // ── Auto-scroll to current lyric line ─────────────────────────────────
+    // Only fires when:
+    //   1. lineIndex actually changes (not on every tick)
+    //   2. The user has not manually scrolled within the last AUTO_SCROLL_PAUSE_MS
     LaunchedEffect(syncState.lineIndex) {
-        if (syncState.lineIndex >= 0 && lyricsDoc != null && lyricsDoc!!.lines.isNotEmpty()) {
+        val timeSinceUserScroll = System.currentTimeMillis() - lastUserScrollTimeMs
+        val userRecentlyScrolled = timeSinceUserScroll < AUTO_SCROLL_PAUSE_MS
+
+        if (!userRecentlyScrolled && syncState.lineIndex >= 0 && lyricsDoc != null && lyricsDoc!!.lines.isNotEmpty()) {
+            // Scroll so the active line is 2 positions from the top for context
             val target = maxOf(0, syncState.lineIndex - 2)
             coroutineScope.launch {
                 listState.animateScrollToItem(target)
@@ -149,23 +168,11 @@ fun FullLyricsScreen(
                             line = line,
                             isActive = isActive,
                             currentWordIndex = if (isActive) syncState.wordIndex else -1,
-                            onClick = { onSeek(line.startMs) }
-                        )
-                    }
-                }
-            } else if (doc != null && doc.plainLyrics.isNotBlank()) {
-                // Plain unsynced lyrics fallback
-                LazyColumn(
-                    contentPadding = PaddingValues(24.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    item {
-                        Text(
-                            text = doc.plainLyrics,
-                            color = TextSecondaryDark,
-                            fontSize = 18.sp,
-                            lineHeight = 28.sp,
-                            textAlign = TextAlign.Start
+                            onClick = {
+                                // User tapped a lyric line to seek — reset scroll suppression
+                                lastUserScrollTimeMs = 0L
+                                onSeek(line.startMs)
+                            }
                         )
                     }
                 }
@@ -178,14 +185,38 @@ fun FullLyricsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    CircularProgressIndicator(color = PrimaryIndigo, modifier = Modifier.size(36.dp))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = if (track != null) "Searching lyrics for '${track?.normalizedTitle}'..." else "Waiting for music playback...",
-                        color = TextSecondaryDark,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center
-                    )
+                    if (track != null) {
+                        CircularProgressIndicator(color = PrimaryIndigo, modifier = Modifier.size(36.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Searching lyrics for\n\u201c${track?.normalizedTitle}\u201d",
+                            color = TextSecondaryDark,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 22.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Trying LRCLIB & LRCMux in parallel...",
+                            color = TextMutedDark,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        Text(
+                            text = "Waiting for music playback...",
+                            color = TextSecondaryDark,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Start playing music in Spotify, YouTube Music, or any media player.",
+                            color = TextMutedDark,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
         }
@@ -221,13 +252,16 @@ fun LyricLineItem(
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         if (line.words.isNotEmpty() && isActive) {
-            // Word-level rendering
-            Row(modifier = Modifier.fillMaxWidth()) {
+            // Word-level rendering for active line
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start
+            ) {
                 line.words.forEachIndexed { wIdx, word ->
                     val isWordActive = wIdx == currentWordIndex
                     Text(
                         text = "${word.text} ",
-                        fontSize = if (isActive) 22.sp else 17.sp,
+                        fontSize = 22.sp,
                         fontWeight = if (isWordActive) FontWeight.ExtraBold else FontWeight.SemiBold,
                         color = if (isWordActive) Color.White else PrimaryIndigoLight
                     )
