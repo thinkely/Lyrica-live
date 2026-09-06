@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+*/build/
+app/build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.navigation/
+captures/
+output.json
+.cxx/
+local.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.jks
+*.keystore
+*.key
+google-services.json

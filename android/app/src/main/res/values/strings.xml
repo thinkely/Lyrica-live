@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Lyrica Live</string>
+    <string name="notification_service_label">Lyrica Live Media Session Listener</string>
+</resources>
