@@ -14,24 +14,25 @@ enum class AiProvider(
         id = "groq",
         displayName = "Groq",
         endpoint = "https://api.groq.com/openai/v1/chat/completions",
-        defaultModel = "llama-3.3-70b-versatile",
+        defaultModel = "openai/gpt-oss-120b",
         popularModels = listOf(
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "mixtral-8x7b-32768",
-            "gemma2-9b-it"
+            "openai/gpt-oss-120b",
+            "groq/compound",
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b"
         )
     ),
     OPENROUTER(
         id = "openrouter",
         displayName = "OpenRouter",
         endpoint = "https://openrouter.ai/api/v1/chat/completions",
-        defaultModel = "google/gemini-2.0-flash-001",
+        defaultModel = "openrouter/free",
         popularModels = listOf(
-            "google/gemini-2.0-flash-001",
-            "deepseek/deepseek-chat",
-            "openai/gpt-4o-mini",
-            "meta-llama/llama-3.3-70b-instruct"
+            "openrouter/free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "google/gemini-2.0-flash-lite-preview-02-05:free",
+            "deepseek/deepseek-r1:free",
+            "qwen/qwen-2.5-coder-32b-instruct:free"
         )
     );
 

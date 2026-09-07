@@ -1,12 +1,10 @@
 package live.lyrica.app
 
 import live.lyrica.app.ai.AiLanguages
-import live.lyrica.app.ai.AiLyricsService
 import live.lyrica.app.ai.AiProvider
 import live.lyrica.app.core.model.LyricLine
 import live.lyrica.app.core.model.LyricsDocument
 import live.lyrica.app.core.model.SyncPrecision
-import live.lyrica.app.security.SecureTokenStorage
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -15,12 +13,12 @@ class AiLyricsServiceTest {
     @Test
     fun testProviderDefaultsAndPresets() {
         val groq = AiProvider.GROQ
-        assertEquals("llama-3.3-70b-versatile", groq.defaultModel)
-        assertTrue(groq.popularModels.contains("llama-3.3-70b-versatile"))
+        assertEquals("openai/gpt-oss-120b", groq.defaultModel)
+        assertTrue(groq.popularModels.contains("openai/gpt-oss-120b"))
 
         val openRouter = AiProvider.OPENROUTER
-        assertEquals("google/gemini-2.0-flash-001", openRouter.defaultModel)
-        assertTrue(openRouter.popularModels.contains("google/gemini-2.0-flash-001"))
+        assertEquals("openrouter/free", openRouter.defaultModel)
+        assertTrue(openRouter.popularModels.contains("openrouter/free"))
     }
 
     @Test

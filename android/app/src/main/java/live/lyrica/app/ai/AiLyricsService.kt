@@ -22,8 +22,9 @@ import java.util.concurrent.TimeUnit
 class AiLyricsService(
     private val storage: SecureTokenStorage,
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
         .build()
 ) {
     private val TAG = "AiLyricsService"
@@ -66,23 +67,23 @@ class AiLyricsService(
 
             val systemPrompt = if (isRomanize) {
                 """
-                You are a professional lyrics transliterator/romanizer.
-                1. Transliterate/romanize ONLY the song lyrics provided into $targetLanguage script (Latin/Roman alphabet).
-                2. Return EXACTLY ${inputLines.size} lines — one transliterated line for each input line.
-                3. Preserve the original pronunciation as closely as possible.
+                You are a professional lyrics transliterator.
+                1. Transliterate ONLY the song lyrics provided into $targetLanguage script (Latin/Roman alphabet).
+                2. Return EXACTLY ${inputLines.size} lines matching the ${inputLines.size} input lines.
+                3. Preserve original pronunciation as closely as possible.
                 4. Preserve line order exactly.
-                5. Do NOT add line numbers, bullet points, explanations, notes, or extra text.
-                6. If a line is already in the target script, return it unchanged.
+                5. Do NOT add line numbers, bullet points, introductory headers, notes, or explanations.
+                6. If a line is already in Latin script, return it unchanged.
                 7. Return ONLY the transliterated lines, nothing else.
                 """.trimIndent()
             } else {
                 """
                 You are a professional song lyrics translator.
                 1. Translate ONLY the song lyrics provided into $targetLanguage.
-                2. Return EXACTLY ${inputLines.size} lines — one translated line for each input line.
+                2. Return EXACTLY ${inputLines.size} lines matching the ${inputLines.size} input lines.
                 3. Preserve line order exactly.
-                4. Maintain the poetic and musical rhythm of the lyrics.
-                5. Do NOT add line numbers, bullet points, explanations, notes, or extra text.
+                4. Maintain poetic and musical rhythm of the lyrics.
+                5. Do NOT add line numbers, bullet points, introductory headers, notes, or explanations.
                 6. Return ONLY the translated lines, nothing else.
                 """.trimIndent()
             }
@@ -92,6 +93,9 @@ class AiLyricsService(
             val jsonBody = JSONObject().apply {
                 put("model", model)
                 put("temperature", 0.3)
+                if (provider == AiProvider.GROQ) {
+                    put("reasoning_effort", "low")
+                }
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
@@ -108,6 +112,7 @@ class AiLyricsService(
                 .url(provider.endpoint)
                 .addHeader("Authorization", "Bearer $apiKey")
                 .addHeader("Content-Type", "application/json")
+                .addHeader("User-Agent", "LyricaLive/2.0")
                 .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
 
             if (provider == AiProvider.OPENROUTER) {
@@ -116,13 +121,18 @@ class AiLyricsService(
             }
 
             val response = httpClient.newCall(requestBuilder.build()).execute()
+            val responseBody = response.body?.string() ?: ""
+
             if (!response.isSuccessful) {
-                val errorBody = response.body?.string() ?: "HTTP ${response.code}"
-                LyricaLogger.e(TAG, "${provider.displayName} API error (${response.code}): $errorBody")
-                return@withContext Result.failure(Exception("${provider.displayName} error (${response.code}): $errorBody"))
+                LyricaLogger.e(TAG, "${provider.displayName} API error (${response.code}): $responseBody")
+                val errorMsg = try {
+                    JSONObject(responseBody).optJSONObject("error")?.optString("message") ?: responseBody
+                } catch (_: Exception) {
+                    responseBody
+                }
+                return@withContext Result.failure(Exception("${provider.displayName} error (${response.code}): $errorMsg"))
             }
 
-            val responseBody = response.body?.string() ?: ""
             val jsonResponse = JSONObject(responseBody)
             val choices = jsonResponse.optJSONArray("choices")
             if (choices == null || choices.length() == 0) {
@@ -130,12 +140,14 @@ class AiLyricsService(
             }
 
             val messageObj = choices.getJSONObject(0).optJSONObject("message")
-            val rawOutput = messageObj?.optString("content")?.trim() ?: ""
+            var rawOutput = messageObj?.optString("content")?.trim() ?: ""
+
+            // Clean output from reasoning tags, markdown headers, and blockquotes
             val outputLines = validateAndCleanOutput(inputLines.size, rawOutput)
 
             if (outputLines == null || outputLines.size != inputLines.size) {
-                LyricaLogger.w(TAG, "Line count mismatch: input=${inputLines.size}, output=${outputLines?.size}")
-                return@withContext Result.failure(Exception("AI returned an unexpected line count format. Please try again."))
+                LyricaLogger.w(TAG, "Line count mismatch: input=${inputLines.size}, output=${outputLines?.size}. Raw output: $rawOutput")
+                return@withContext Result.failure(Exception("AI output formatting issue. Expected ${inputLines.size} lines, got ${outputLines?.size ?: 0}. Please try again."))
             }
 
             // Reconstruct full list of lines with exact original timestamps
@@ -154,7 +166,7 @@ class AiLyricsService(
             )
 
             cache[cacheKey] = transformedDoc
-            LyricaLogger.i(TAG, "Successfully ${if (isRomanize) "romanized" else "translated"} lyrics to $targetLanguage with ${provider.displayName}")
+            LyricaLogger.i(TAG, "Successfully ${if (isRomanize) "romanized" else "translated"} lyrics to $targetLanguage with ${provider.displayName} ($model)")
             return@withContext Result.success(transformedDoc)
 
         } catch (e: Exception) {
@@ -164,14 +176,36 @@ class AiLyricsService(
     }
 
     private fun validateAndCleanOutput(expectedCount: Int, rawOutput: String): List<String>? {
-        val lines = rawOutput.lines().map { it.trim() }
-        if (lines.size == expectedCount) return lines
+        if (rawOutput.isBlank()) return null
 
-        // Filter out empty leading/trailing lines
-        val filtered = lines.filter { it.isNotEmpty() }
-        if (filtered.size == expectedCount) return filtered
+        // 1. Remove <think>...</think> reasoning blocks if present
+        var text = rawOutput.replace(Regex("""(?s)<think>.*?</think>"""), "").trim()
 
-        return null
+        // 2. Strip leading introductory headers like "**Translation (to English):**" or "Translation:"
+        text = text.replace(Regex("""^(?i)\*?\*?(Translation|Romanized|Transliteration)[^\n]*\*?\*?\n+"""), "").trim()
+
+        // 3. Process line by line, stripping blockquote prefixes `> ` and list markers `1. ` or `* `
+        val cleanedLines = text.lines()
+            .map { line ->
+                var l = line.trim()
+                l = l.replace(Regex("""^>\s*"""), "")
+                l = l.replace(Regex("""^[\*\-•]\s*"""), "")
+                l = l.replace(Regex("""^\d+[\.\)]\s*"""), "")
+                l = l.replace(Regex("""^\*\*|\*\*$"""), "")
+                l.trim()
+            }
+            .filter { it.isNotEmpty() }
+
+        if (cleanedLines.size == expectedCount) {
+            return cleanedLines
+        }
+
+        // If line count is slightly larger due to intro header not stripped, attempt drop of first line
+        if (cleanedLines.size == expectedCount + 1 && (cleanedLines[0].contains("Translation", ignoreCase = true) || cleanedLines[0].contains("Romanized", ignoreCase = true))) {
+            return cleanedLines.drop(1)
+        }
+
+        return if (cleanedLines.size == expectedCount) cleanedLines else null
     }
 
     fun getSelectedProvider(): AiProvider {

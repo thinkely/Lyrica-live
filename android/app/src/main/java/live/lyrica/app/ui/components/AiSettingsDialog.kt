@@ -1,6 +1,8 @@
 package live.lyrica.app.ui.components
 
-import androidx.compose.foundation.background
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,7 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -16,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -33,6 +36,7 @@ fun AiSettingsDialog(
     onDismiss: () -> Unit,
     onSaved: () -> Unit
 ) {
+    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var selectedProvider by remember { mutableStateOf(aiService.getSelectedProvider()) }
@@ -42,6 +46,20 @@ fun AiSettingsDialog(
     var isCustomModel by remember { mutableStateOf(!selectedProvider.popularModels.contains(selectedModel)) }
     var preferredLang by remember { mutableStateOf(aiService.getPreferredLanguage()) }
     var keyVisible by remember { mutableStateOf(false) }
+
+    fun pasteFromClipboard(onPasted: (String) -> Unit) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        val clip = clipboard?.primaryClip
+        if (clip != null && clip.itemCount > 0) {
+            val text = clip.getItemAt(0).text?.toString()?.trim() ?: ""
+            if (text.isNotBlank()) {
+                onPasted(text)
+                Toast.makeText(context, "Pasted from clipboard", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "Clipboard is empty", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -65,7 +83,7 @@ fun AiSettingsDialog(
             ) {
                 Column {
                     Text("AI Translation & Romanization", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LabelPrimary)
-                    Text("Bring your own API key for real-time lyrics translation", fontSize = 12.sp, color = LabelSecondary)
+                    Text("Bring your own Groq / OpenRouter key (Free models supported)", fontSize = 12.sp, color = LabelSecondary)
                 }
             }
 
@@ -108,8 +126,23 @@ fun AiSettingsDialog(
                 }
             }
 
-            // API Key Input
-            Text("${selectedProvider.displayName} API Key", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = LabelPrimary)
+            // API Key Input with Paste Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("${selectedProvider.displayName} API Key", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = LabelPrimary)
+                TextButton(
+                    onClick = { pasteFromClipboard { apiKey = it } },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp), tint = AppleRed)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Paste", fontSize = 12.sp, color = AppleRed)
+                }
+            }
+
             OutlinedTextField(
                 value = apiKey,
                 onValueChange = { apiKey = it },
@@ -134,7 +167,7 @@ fun AiSettingsDialog(
             )
 
             // Model Selection
-            Text("MODEL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AppleRed, letterSpacing = 1.sp)
+            Text("RECOMMENDED MODELS (FREE)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AppleRed, letterSpacing = 1.sp)
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -170,13 +203,33 @@ fun AiSettingsDialog(
             }
 
             if (isCustomModel) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Custom Model ID", fontSize = 12.sp, color = LabelSecondary)
+                    TextButton(
+                        onClick = {
+                            pasteFromClipboard {
+                                customModel = it
+                                selectedModel = it
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp), tint = AppleRed)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Paste", fontSize = 12.sp, color = AppleRed)
+                    }
+                }
                 OutlinedTextField(
                     value = customModel,
                     onValueChange = {
                         customModel = it
                         selectedModel = it
                     },
-                    placeholder = { Text("e.g. llama-3.3-70b-versatile or deepseek/deepseek-r1") },
+                    placeholder = { Text("e.g. openai/gpt-oss-120b or openrouter/free") },
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth(),
