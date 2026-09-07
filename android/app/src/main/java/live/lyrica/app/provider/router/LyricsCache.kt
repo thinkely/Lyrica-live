@@ -47,7 +47,9 @@ class LyricsCache(
         LyricaLogger.d(TAG, "Cached '${doc.artist} - ${doc.title}' (provider=${doc.provider})")
     }
 
-    fun remove(key: String) = store.remove(key)
+    fun remove(key: String) {
+        store.remove(key)
+    }
 
     fun clear() = store.clear()
 

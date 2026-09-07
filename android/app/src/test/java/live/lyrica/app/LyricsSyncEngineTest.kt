@@ -1,11 +1,10 @@
 package live.lyrica.app
 
-import live.lyrica.app.core.engine.LyricsSyncEngine
 import live.lyrica.app.core.model.LyricLine
+import live.lyrica.app.core.model.LyricWord
 import live.lyrica.app.core.model.LyricsDocument
 import live.lyrica.app.core.model.SyncPrecision
-import live.lyrica.app.core.model.SyllableTiming
-import live.lyrica.app.core.model.WordTiming
+import live.lyrica.app.engine.LyricsSyncEngine
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -24,17 +23,9 @@ class LyricsSyncEngineTest {
                 endMs = 20000L,
                 text = "I've been on my own",
                 words = listOf(
-                    WordTiming(startMs = 15000L, endMs = 16000L, text = "I've"),
-                    WordTiming(startMs = 16000L, endMs = 17500L, text = "been"),
-                    WordTiming(
-                        startMs = 17500L,
-                        endMs = 20000L,
-                        text = "alone",
-                        syllables = listOf(
-                            SyllableTiming(startMs = 17500L, endMs = 18500L, text = "a"),
-                            SyllableTiming(startMs = 18500L, endMs = 20000L, text = "lone")
-                        )
-                    )
+                    LyricWord(startMs = 15000L, endMs = 16000L, text = "I've"),
+                    LyricWord(startMs = 16000L, endMs = 17500L, text = "been"),
+                    LyricWord(startMs = 17500L, endMs = 20000L, text = "alone")
                 )
             ),
             LyricLine(id = "l3", startMs = 20000L, endMs = 25000L, text = "Maybe you can show me how to love")
@@ -58,13 +49,11 @@ class LyricsSyncEngineTest {
     }
 
     @Test
-    fun testSyncPositionWordAndSyllableResolution() {
+    fun testSyncPositionWordResolution() {
         val state = LyricsSyncEngine.resolveSyncState(sampleDoc, 18000L)
         assertEquals(1, state.lineIndex)
         assertEquals(2, state.wordIndex)
         assertEquals("alone", state.currentWord?.text)
-        assertEquals(0, state.syllableIndex)
-        assertEquals("a", state.currentSyllable?.text)
     }
 
     @Test
