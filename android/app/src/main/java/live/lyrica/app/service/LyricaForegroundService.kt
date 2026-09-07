@@ -305,14 +305,14 @@ class LyricaForegroundService : Service() {
     }
 
     private fun registerProviders() {
-        val wordLevel = true // TODO: read from preferences
+        val wordLevel = live.lyrica.app.security.SecureTokenStorage(applicationContext).getBoolean("word_level_sync", true)
         live.lyrica.app.provider.ProviderRegistry.register(
             live.lyrica.app.provider.impl.LrcLibProvider(httpClient)
         )
         live.lyrica.app.provider.ProviderRegistry.register(
             live.lyrica.app.provider.impl.LrcMuxProvider(httpClient, wordLevel)
         )
-        LyricaLogger.i(TAG, "Registered ${live.lyrica.app.provider.ProviderRegistry.getAll().size} providers")
+        LyricaLogger.i(TAG, "Registered ${live.lyrica.app.provider.ProviderRegistry.getAll().size} providers (wordLevel=$wordLevel)")
     }
 
     private fun estimatePosition(): Long {
