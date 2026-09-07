@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,7 +16,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
@@ -22,28 +25,42 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
-import live.lyrica.app.core.mediasession.LyricaMediaSessionListenerService
 import live.lyrica.app.core.model.LyricLine
+import live.lyrica.app.service.LyricaForegroundService
 
 class FullLyricsActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContent {
             LyricaTheme {
                 FullLyricsScreen(
                     onBack = { finish() },
                     onSeek = { posMs ->
-                        LyricaMediaSessionListenerService.instance?.mediaSessionMonitor?.seekTo(posMs)
+                        val intent = android.content.Intent(
+                            this,
+                            live.lyrica.app.service.LyricaForegroundService::class.java
+                        ).apply {
+                            action = LyricaForegroundService.ACTION_SEEK
+                            putExtra(LyricaForegroundService.EXTRA_SEEK_POSITION, posMs)
+                        }
+                        startService(intent)
                     },
                     onTogglePlay = {
-                        LyricaMediaSessionListenerService.instance?.mediaSessionMonitor?.togglePlayPause()
+                        val intent = android.content.Intent(
+                            this,
+                            live.lyrica.app.service.LyricaForegroundService::class.java
+                        ).apply {
+                            action = LyricaForegroundService.ACTION_TOGGLE_PLAY
+                        }
+                        startService(intent)
                     }
                 )
             }
@@ -58,41 +75,28 @@ fun FullLyricsScreen(
     onSeek: (Long) -> Unit,
     onTogglePlay: () -> Unit
 ) {
-    val track by LyricaMediaSessionListenerService.currentTrackFlow.collectAsState()
-    val lyricsDoc by LyricaMediaSessionListenerService.currentLyricsFlow.collectAsState()
-    val syncState by LyricaMediaSessionListenerService.syncStateFlow.collectAsState()
-    val isPlaying by LyricaMediaSessionListenerService.isPlayingFlow.collectAsState()
+    val track     by LyricaForegroundService.currentQueryFlow.collectAsState()
+    val doc       by LyricaForegroundService.currentLyricsFlow.collectAsState()
+    val syncState by LyricaForegroundService.syncStateFlow.collectAsState()
+    val isPlaying by LyricaForegroundService.isPlayingFlow.collectAsState()
+    val status    by LyricaForegroundService.searchStatusFlow.collectAsState()
 
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
 
-    // ── User-scroll detection ──────────────────────────────────────────────
-    // Track the last time the user manually scrolled the list. Auto-scroll is
-    // suppressed for AUTO_SCROLL_PAUSE_MS milliseconds after any user interaction,
-    // then resumes automatically.
-    val AUTO_SCROLL_PAUSE_MS = 5000L
-    var lastUserScrollTimeMs by remember { mutableLongStateOf(0L) }
+    // User scroll suppression — same logic from previous version
+    var lastUserScrollMs by remember { mutableLongStateOf(0L) }
+    val SCROLL_PAUSE_MS = 5000L
 
     LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) {
-            lastUserScrollTimeMs = System.currentTimeMillis()
-        }
+        if (listState.isScrollInProgress) lastUserScrollMs = System.currentTimeMillis()
     }
 
-    // ── Auto-scroll to current lyric line ─────────────────────────────────
-    // Only fires when:
-    //   1. lineIndex actually changes (not on every tick)
-    //   2. The user has not manually scrolled within the last AUTO_SCROLL_PAUSE_MS
     LaunchedEffect(syncState.lineIndex) {
-        val timeSinceUserScroll = System.currentTimeMillis() - lastUserScrollTimeMs
-        val userRecentlyScrolled = timeSinceUserScroll < AUTO_SCROLL_PAUSE_MS
-
-        if (!userRecentlyScrolled && syncState.lineIndex >= 0 && lyricsDoc != null && lyricsDoc!!.lines.isNotEmpty()) {
-            // Scroll so the active line is 2 positions from the top for context
+        val elapsed = System.currentTimeMillis() - lastUserScrollMs
+        if (elapsed >= SCROLL_PAUSE_MS && syncState.lineIndex >= 0 && doc != null) {
             val target = maxOf(0, syncState.lineIndex - 2)
-            coroutineScope.launch {
-                listState.animateScrollToItem(target)
-            }
+            scope.launch { listState.animateScrollToItem(target) }
         }
     }
 
@@ -102,119 +106,120 @@ fun FullLyricsScreen(
                 title = {
                     Column {
                         Text(
-                            text = track?.rawTitle?.ifBlank { "Lyrica Live" } ?: "No Media Playing",
-                            fontSize = 17.sp,
+                            track?.rawTitle?.ifBlank { track?.title ?: "Lyrics" } ?: "Lyrics",
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = TextPrimaryDark,
+                            color = LabelPrimary,
                             maxLines = 1
                         )
                         Text(
-                            text = track?.rawArtist?.ifBlank { "Detecting..." } ?: "",
-                            fontSize = 13.sp,
-                            color = TextSecondaryDark,
+                            track?.rawArtist?.ifBlank { track?.artist ?: "" } ?: "",
+                            fontSize = 12.sp,
+                            color = LabelSecondary,
                             maxLines = 1
                         )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimaryDark)
+                        Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Back", tint = AppleRed)
                     }
                 },
                 actions = {
-                    lyricsDoc?.provider?.let { provider ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = SurfaceVariantDark,
+                    doc?.let {
+                        Text(
+                            it.provider.uppercase(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AppleRed,
                             modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Text(
-                                text = provider.uppercase(),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = PrimaryIndigoLight,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
+                        )
                     }
                     IconButton(onClick = onTogglePlay) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = PrimaryIndigoLight
+                            tint = AppleRed
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundDark)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
-        containerColor = BackgroundDark
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            val doc = lyricsDoc
-            if (doc != null && doc.lines.isNotEmpty()) {
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(top = 32.dp, bottom = 120.dp, start = 20.dp, end = 20.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    itemsIndexed(doc.lines, key = { idx, line -> line.id.ifEmpty { "$idx" } }) { idx, line ->
-                        val isActive = idx == syncState.lineIndex
-                        LyricLineItem(
-                            line = line,
-                            isActive = isActive,
-                            currentWordIndex = if (isActive) syncState.wordIndex else -1,
-                            onClick = {
-                                // User tapped a lyric line to seek — reset scroll suppression
-                                lastUserScrollTimeMs = 0L
-                                onSeek(line.startMs)
-                            }
-                        )
-                    }
+        containerColor = SystemGray6
+    ) { pad ->
+        val theDoc = doc
+        if (theDoc != null && theDoc.lines.isNotEmpty()) {
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(
+                    top = 24.dp, bottom = 120.dp, start = 20.dp, end = 20.dp
+                ),
+                modifier = Modifier.fillMaxSize().padding(pad),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                itemsIndexed(
+                    theDoc.lines,
+                    key = { idx, line -> line.id.ifEmpty { idx.toString() } }
+                ) { idx, line ->
+                    val isActive = idx == syncState.lineIndex
+                    LyricLineRow(
+                        line = line,
+                        isActive = isActive,
+                        currentWordIdx = if (isActive) syncState.wordIndex else -1,
+                        onClick = {
+                            lastUserScrollMs = 0L   // Reset scroll suppression on seek tap
+                            onSeek(line.startMs)
+                        }
+                    )
                 }
-            } else {
-                // Empty / Searching state
+            }
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(pad),
+                contentAlignment = Alignment.Center
+            ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    modifier = Modifier.padding(32.dp)
                 ) {
                     if (track != null) {
-                        CircularProgressIndicator(color = PrimaryIndigo, modifier = Modifier.size(36.dp))
-                        Spacer(modifier = Modifier.height(16.dp))
+                        CircularProgressIndicator(color = AppleRed, modifier = Modifier.size(32.dp))
+                        Spacer(Modifier.height(16.dp))
                         Text(
-                            text = "Searching lyrics for\n\u201c${track?.normalizedTitle}\u201d",
-                            color = TextSecondaryDark,
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 22.sp
+                            "Searching for lyrics",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = LabelPrimary
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "Trying LRCLIB & LRCMux in parallel...",
-                            color = TextMutedDark,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
+                            "LRCLIB · LRCMux",
+                            fontSize = 13.sp,
+                            color = LabelSecondary
                         )
+                        if (status == "not_found") {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                "No synchronized lyrics found",
+                                fontSize = 13.sp,
+                                color = SystemGray2,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     } else {
-                        Text(
-                            text = "Waiting for music playback...",
-                            color = TextSecondaryDark,
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = SystemGray3,
+                            modifier = Modifier.size(48.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(Modifier.height(12.dp))
                         Text(
-                            text = "Start playing music in Spotify, YouTube Music, or any media player.",
-                            color = TextMutedDark,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
+                            "Start playing music",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = LabelSecondary
                         )
                     }
                 }
@@ -224,56 +229,61 @@ fun FullLyricsScreen(
 }
 
 @Composable
-fun LyricLineItem(
+private fun LyricLineRow(
     line: LyricLine,
     isActive: Boolean,
-    currentWordIndex: Int,
+    currentWordIdx: Int,
     onClick: () -> Unit
 ) {
-    val textColor by animateColorAsState(
-        targetValue = if (isActive) ActiveLyricHighlight else TextMutedDark,
-        animationSpec = tween(durationMillis = 200),
-        label = "lyricTextColor"
+    val sizeAnim by animateFloatAsState(
+        targetValue = if (isActive) 1f else 0.85f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "lyricSize"
+    )
+    val alphaAnim by animateFloatAsState(
+        targetValue = if (isActive) 1f else 0.35f,
+        animationSpec = tween(200),
+        label = "lyricAlpha"
     )
 
-    val bgColor by animateColorAsState(
-        targetValue = if (isActive) SurfaceVariantDark.copy(alpha = 0.5f) else BackgroundDark,
-        animationSpec = tween(durationMillis = 200),
-        label = "lyricBgColor"
-    )
+    val fontSize = (20 * sizeAnim).sp
+    val activeColor = ActiveLyricColor
+    val inactiveColor = LabelPrimary.copy(alpha = alphaAnim)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(bgColor)
+            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(vertical = 6.dp, horizontal = 4.dp)
     ) {
-        if (line.words.isNotEmpty() && isActive) {
-            // Word-level rendering for active line
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start
-            ) {
-                line.words.forEachIndexed { wIdx, word ->
-                    val isWordActive = wIdx == currentWordIndex
-                    Text(
-                        text = "${word.text} ",
-                        fontSize = 22.sp,
-                        fontWeight = if (isWordActive) FontWeight.ExtraBold else FontWeight.SemiBold,
-                        color = if (isWordActive) Color.White else PrimaryIndigoLight
-                    )
+        if (isActive && line.hasWordSync && currentWordIdx >= 0) {
+            // ── Word-level karaoke rendering ──────────────────────────────
+            Text(
+                text = buildAnnotatedString {
+                    line.words.forEachIndexed { idx, word ->
+                        val isHighlighted = idx <= currentWordIdx
+                        withStyle(
+                            SpanStyle(
+                                color = if (isHighlighted) activeColor else LabelPrimary.copy(alpha = 0.3f),
+                                fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = fontSize
+                            )
+                        ) {
+                            append(word.text)
+                            if (idx < line.words.lastIndex) append(" ")
+                        }
+                    }
                 }
-            }
+            )
         } else {
+            // ── Line-level rendering ───────────────────────────────────────
             Text(
                 text = line.text,
-                fontSize = if (isActive) 21.sp else 17.sp,
+                fontSize = fontSize,
                 fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                color = textColor,
-                lineHeight = 28.sp
+                color = if (isActive) activeColor else inactiveColor,
+                lineHeight = (fontSize.value * 1.4).sp
             )
         }
     }

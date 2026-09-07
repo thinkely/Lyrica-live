@@ -16,7 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import live.lyrica.app.core.logging.LyricaLogger
@@ -47,15 +48,13 @@ class DebugLogActivity : ComponentActivity() {
 fun DebugLogScreen(onBack: () -> Unit) {
     val context = LocalContext.current
 
-    // Collect log buffer as live state that refreshes every second
     var logEntries by remember { mutableStateOf(LyricaLogger.logBuffer.toList()) }
     var filterLevel by remember { mutableStateOf<LyricaLogger.Level?>(null) }
     var autoScroll by remember { mutableStateOf(true) }
 
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
 
-    // Refresh logs every 800ms
     LaunchedEffect(Unit) {
         while (true) {
             logEntries = LyricaLogger.logBuffer.toList()
@@ -73,93 +72,76 @@ fun DebugLogScreen(onBack: () -> Unit) {
             TopAppBar(
                 title = {
                     Column {
-                        Text(
-                            "Debug Logs",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                            color = TextPrimaryDark
-                        )
+                        Text("Debug Logs", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                         Text(
                             "${filtered.size} entries  •  DEV ONLY",
                             fontSize = 11.sp,
-                            color = Color(0xFFFBBF24)
+                            color = Color(0xFFD97706)
                         )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimaryDark)
+                        Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Back", tint = AppleRed)
                     }
                 },
                 actions = {
-                    // Copy all logs
                     IconButton(onClick = {
                         val text = LyricaLogger.getAllLogsAsText()
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cm.setPrimaryClip(ClipData.newPlainText("Lyrica Logs", text))
-                        Toast.makeText(context, "Copied ${logEntries.size} log entries", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Copied ${logEntries.size} entries", Toast.LENGTH_SHORT).show()
                     }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy logs", tint = PrimaryIndigoLight)
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = AppleRed)
                     }
-                    // Clear logs
                     IconButton(onClick = {
                         LyricaLogger.clearBuffer()
                         logEntries = emptyList()
                     }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Clear logs", tint = Color(0xFFEF4444))
+                        Icon(Icons.Default.Delete, contentDescription = "Clear", tint = Color(0xFFEF4444))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0D0D14))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
-        containerColor = Color(0xFF0D0D14)
+        containerColor = SystemGray6
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier = Modifier.fillMaxSize().padding(padding)
         ) {
             // Level filter chips
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                LevelChip("ALL", filterLevel == null, Color(0xFF6366F1)) { filterLevel = null }
-                LevelChip("DEBUG", filterLevel == LyricaLogger.Level.DEBUG, Color(0xFF6B7280)) { filterLevel = LyricaLogger.Level.DEBUG }
-                LevelChip("INFO", filterLevel == LyricaLogger.Level.INFO, Color(0xFF22C55E)) { filterLevel = LyricaLogger.Level.INFO }
-                LevelChip("WARN", filterLevel == LyricaLogger.Level.WARN, Color(0xFFFBBF24)) { filterLevel = LyricaLogger.Level.WARN }
-                LevelChip("ERROR", filterLevel == LyricaLogger.Level.ERROR, Color(0xFFEF4444)) { filterLevel = LyricaLogger.Level.ERROR }
-            }
+                LevelChip("ALL", filterLevel == null, AppleRed) { filterLevel = null }
+                LevelChip("D", filterLevel == LyricaLogger.Level.DEBUG, SystemGray) { filterLevel = LyricaLogger.Level.DEBUG }
+                LevelChip("I", filterLevel == LyricaLogger.Level.INFO, Color(0xFF22C55E)) { filterLevel = LyricaLogger.Level.INFO }
+                LevelChip("W", filterLevel == LyricaLogger.Level.WARN, Color(0xFFF59E0B)) { filterLevel = LyricaLogger.Level.WARN }
+                LevelChip("E", filterLevel == LyricaLogger.Level.ERROR, Color(0xFFEF4444)) { filterLevel = LyricaLogger.Level.ERROR }
 
-            // Auto-scroll toggle
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Auto-scroll", fontSize = 12.sp, color = TextMutedDark)
-                Spacer(modifier = Modifier.width(8.dp))
-                Switch(
-                    checked = autoScroll,
-                    onCheckedChange = { autoScroll = it },
-                    modifier = Modifier.height(24.dp),
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = PrimaryIndigo
+                Spacer(Modifier.weight(1f))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Scroll", fontSize = 11.sp, color = LabelSecondary)
+                    Switch(
+                        checked = autoScroll,
+                        onCheckedChange = { autoScroll = it },
+                        modifier = Modifier.height(24.dp).padding(start = 4.dp),
+                        colors = SwitchDefaults.colors(checkedTrackColor = AppleRed, checkedThumbColor = Color.White)
                     )
-                )
+                }
             }
 
-            HorizontalDivider(color = SurfaceVariantDark, modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(color = Separator)
 
             if (filtered.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         "No log entries yet.\nStart playing music to see activity.",
-                        color = TextMutedDark,
+                        color = LabelSecondary,
                         fontSize = 13.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                 }
             } else {
@@ -178,16 +160,11 @@ fun DebugLogScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun LevelChip(
-    label: String,
-    selected: Boolean,
-    color: Color,
-    onClick: () -> Unit
-) {
+private fun LevelChip(label: String, selected: Boolean, color: Color, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
-        color = if (selected) color.copy(alpha = 0.3f) else Color.Transparent,
+        color = if (selected) color.copy(alpha = 0.15f) else Color.Transparent,
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
             color = if (selected) color else color.copy(alpha = 0.4f)
@@ -206,14 +183,14 @@ private fun LevelChip(
 @Composable
 private fun LogRow(entry: LyricaLogger.LogEntry) {
     val levelColor = when (entry.level) {
-        LyricaLogger.Level.DEBUG -> Color(0xFF6B7280)
+        LyricaLogger.Level.DEBUG -> SystemGray
         LyricaLogger.Level.INFO  -> Color(0xFF22C55E)
-        LyricaLogger.Level.WARN  -> Color(0xFFFBBF24)
+        LyricaLogger.Level.WARN  -> Color(0xFFF59E0B)
         LyricaLogger.Level.ERROR -> Color(0xFFEF4444)
     }
     val bgColor = when (entry.level) {
         LyricaLogger.Level.ERROR -> Color(0xFFEF4444).copy(alpha = 0.05f)
-        LyricaLogger.Level.WARN  -> Color(0xFFFBBF24).copy(alpha = 0.03f)
+        LyricaLogger.Level.WARN  -> Color(0xFFF59E0B).copy(alpha = 0.04f)
         else -> Color.Transparent
     }
 
@@ -223,7 +200,6 @@ private fun LogRow(entry: LyricaLogger.LogEntry) {
             .background(bgColor)
             .padding(horizontal = 10.dp, vertical = 3.dp)
     ) {
-        // Level badge
         Text(
             text = entry.level.name.take(1),
             fontSize = 10.sp,
@@ -232,32 +208,26 @@ private fun LogRow(entry: LyricaLogger.LogEntry) {
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.width(12.dp)
         )
-        Spacer(modifier = Modifier.width(6.dp))
+        Spacer(Modifier.width(6.dp))
         Column {
-            // Tag + timestamp
             Row {
                 Text(
                     text = entry.tag,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = PrimaryIndigoLight,
+                    color = AppleRed,
                     fontFamily = FontFamily.Monospace
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(Modifier.width(6.dp))
                 val fmt = remember { java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US) }
                 Text(
                     text = fmt.format(java.util.Date(entry.timestampMs)),
                     fontSize = 10.sp,
-                    color = TextMutedDark,
+                    color = LabelTertiary,
                     fontFamily = FontFamily.Monospace
                 )
             }
-            // Message (horizontal scroll for long lines)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-            ) {
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 Text(
                     text = entry.message,
                     fontSize = 11.sp,
@@ -268,5 +238,5 @@ private fun LogRow(entry: LyricaLogger.LogEntry) {
             }
         }
     }
-    HorizontalDivider(color = SurfaceVariantDark.copy(alpha = 0.3f), thickness = 0.5.dp)
+    HorizontalDivider(color = Separator.copy(alpha = 0.5f), thickness = 0.5.dp)
 }

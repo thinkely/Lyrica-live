@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("com.chaquo.python")
 }
 
 android {
@@ -12,16 +11,12 @@ android {
         applicationId = "live.lyrica.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
-        }
-
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
         }
     }
 
@@ -66,21 +61,6 @@ android {
     }
 }
 
-chaquopy {
-    defaultConfig {
-        version = "3.11"
-        pip {
-            install("httpx==0.28.1")
-            install("tenacity==8.3.0")
-        }
-    }
-    sourceSets {
-        getByName("main") {
-            srcDir("src/main/python")
-        }
-    }
-}
-
 dependencies {
     // Core AndroidX & Lifecycle
     implementation("androidx.core:core-ktx:1.13.1")
@@ -90,6 +70,9 @@ dependencies {
 
     // Media & Notification
     implementation("androidx.media:media:1.7.0")
+
+    // HTTP — native OkHttp (replaces Chaquopy/Python httpx)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Jetpack Compose & Material 3
     implementation(platform("androidx.compose:compose-bom:2024.05.00"))
@@ -103,7 +86,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    // JSON serialization / parsing
+    // JSON
     implementation("org.json:json:20240303")
 
     // Testing

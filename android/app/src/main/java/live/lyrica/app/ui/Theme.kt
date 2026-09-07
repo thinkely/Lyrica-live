@@ -1,44 +1,46 @@
 package live.lyrica.app.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val BackgroundDark = Color(0xFF0C0E14)
-val SurfaceDark = Color(0xFF161922)
-val SurfaceVariantDark = Color(0xFF222634)
-val PrimaryIndigo = Color(0xFF6366F1)
-val PrimaryIndigoLight = Color(0xFFA5B4FC)
-val SecondaryEmerald = Color(0xFF10B981)
-val TextPrimaryDark = Color(0xFFF8FAFC)
-val TextSecondaryDark = Color(0xFF94A3B8)
-val TextMutedDark = Color(0xFF475569)
-val ActiveLyricHighlight = Color(0xFFE0E7FF)
+// ── Apple Music-inspired design tokens ──────────────────────────────────────
+val AppleRed      = Color(0xFFFA233B)   // Apple Music primary red
+val AppleRedLight = Color(0xFFFF6B81)   // lighter red for highlights
+val SystemGray    = Color(0xFF8E8E93)   // iOS system gray
+val SystemGray2   = Color(0xFFAEAEB2)
+val SystemGray3   = Color(0xFFC7C7CC)
+val SystemGray4   = Color(0xFFD1D1D6)
+val SystemGray5   = Color(0xFFE5E5EA)
+val SystemGray6   = Color(0xFFF2F2F7)   // background
+val LabelPrimary  = Color(0xFF000000)
+val LabelSecondary = Color(0xFF3C3C43).copy(alpha = 0.6f)
+val LabelTertiary  = Color(0xFF3C3C43).copy(alpha = 0.3f)
+val Separator      = Color(0xFF3C3C43).copy(alpha = 0.12f)
 
-private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryIndigo,
-    onPrimary = Color.White,
-    primaryContainer = SurfaceVariantDark,
-    onPrimaryContainer = PrimaryIndigoLight,
-    secondary = SecondaryEmerald,
-    onSecondary = Color.White,
-    background = BackgroundDark,
-    onBackground = TextPrimaryDark,
-    surface = SurfaceDark,
-    onSurface = TextPrimaryDark,
-    surfaceVariant = SurfaceVariantDark,
-    onSurfaceVariant = TextSecondaryDark
+// Active lyric line — Apple Music red gradient effect
+val ActiveLyricColor = AppleRed
+
+private val LyricaLightColors = lightColorScheme(
+    primary          = AppleRed,
+    onPrimary        = Color.White,
+    primaryContainer = Color(0xFFFFE5E8),
+    secondary        = Color(0xFF6C6C70),
+    onSecondary      = Color.White,
+    background       = SystemGray6,
+    onBackground     = LabelPrimary,
+    surface          = Color.White,
+    onSurface        = LabelPrimary,
+    surfaceVariant   = SystemGray5,
+    onSurfaceVariant = Color(0xFF3C3C43),
+    outline          = Separator
 )
 
 @Composable
-fun LyricaTheme(
-    darkTheme: Boolean = true, // Lyrica Live is dark-first
-    content: @Composable () -> Unit
-) {
+fun LyricaTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = DarkColorScheme,
+        colorScheme = LyricaLightColors,
         content = content
     )
 }

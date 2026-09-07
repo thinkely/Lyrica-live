@@ -1,7 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.LyricaLive" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">@color/background_dark</item>
-        <item name="android:navigationBarColor">@color/background_dark</item>
-        <item name="android:windowBackground">@color/background_dark</item>
+    <style name="Theme.LyricaLive" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">#FA233B</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#FFE5E8</item>
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="colorOnSurface">#000000</item>
+        <item name="android:windowBackground">#F2F2F7</item>
+        <item name="android:statusBarColor">#F2F2F7</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>
