@@ -354,6 +354,49 @@ fun MainScreen(
                     HorizontalDivider(color = Separator)
                     Spacer(Modifier.height(8.dp))
 
+                    // AI Translation & Romanization section
+                    val aiService = remember { live.lyrica.app.ai.AiLyricsService(storage) }
+                    var showAiDialog by remember { mutableStateOf(false) }
+
+                    if (showAiDialog) {
+                        live.lyrica.app.ui.components.AiSettingsDialog(
+                            aiService = aiService,
+                            onDismiss = { showAiDialog = false },
+                            onSaved = { showAiDialog = false }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("AI Translation & Romanize", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                "${aiService.getSelectedProvider().displayName} · ${aiService.getPreferredLanguage()}",
+                                fontSize = 12.sp,
+                                color = LabelSecondary
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = { showAiDialog = true },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                if (aiService.hasKeyForSelectedProvider()) "Configured" else "Set Key",
+                                fontSize = 12.sp,
+                                color = if (aiService.hasKeyForSelectedProvider()) Color(0xFF2E7D32) else AppleRed,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider(color = Separator)
+                    Spacer(Modifier.height(8.dp))
+
                     // Provider status
                     Text("Active Providers", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(6.dp))
