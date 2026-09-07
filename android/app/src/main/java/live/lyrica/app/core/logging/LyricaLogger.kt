@@ -29,23 +29,31 @@ object LyricaLogger {
     }
 
     private const val MAX_LOG_ENTRIES = 500
-    private val _logBuffer = CopyOnWriteArrayList<LogEntry>()
-    val logBuffer: List<LogEntry> get() = _logBuffer
+    private val bufferLock = Any()
+    private val _logBuffer = ArrayList<LogEntry>(MAX_LOG_ENTRIES + 10)
+
+    val logBuffer: List<LogEntry>
+        get() = synchronized(bufferLock) { ArrayList(_logBuffer) }
 
     private fun appendToBuffer(entry: LogEntry) {
-        _logBuffer.add(entry)
-        // Keep ring buffer bounded
-        while (_logBuffer.size > MAX_LOG_ENTRIES) {
-            _logBuffer.removeAt(0)
+        synchronized(bufferLock) {
+            _logBuffer.add(entry)
+            while (_logBuffer.size > MAX_LOG_ENTRIES) {
+                _logBuffer.removeAt(0)
+            }
         }
     }
 
     fun clearBuffer() {
-        _logBuffer.clear()
+        synchronized(bufferLock) {
+            _logBuffer.clear()
+        }
     }
 
     fun getAllLogsAsText(): String {
-        return _logBuffer.joinToString("\n") { it.formatted() }
+        return synchronized(bufferLock) {
+            _logBuffer.joinToString("\n") { it.formatted() }
+        }
     }
 
     // Patterns for redacting sensitive secrets

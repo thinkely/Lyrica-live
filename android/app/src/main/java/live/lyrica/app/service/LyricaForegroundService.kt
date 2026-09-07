@@ -155,6 +155,9 @@ class LyricaForegroundService : Service() {
         // Register providers
         registerProviders()
 
+        // Check if there is already an active media session from the listener service
+        LyricaMediaSessionListenerService.instance?.requestActiveSessionsRefresh()
+
         LyricaLogger.i(TAG, "LyricaForegroundService created")
     }
 
@@ -318,8 +321,12 @@ class LyricaForegroundService : Service() {
     private fun estimatePosition(): Long {
         val state = activeController?.playbackState ?: return lastPositionMs
         if (state.state != PlaybackState.STATE_PLAYING) return state.position
-        val delta = System.currentTimeMillis() - state.lastPositionUpdateTime
-        return state.position + (delta * state.playbackSpeed).toLong()
+        val delta = android.os.SystemClock.elapsedRealtime() - state.lastPositionUpdateTime
+        return if (delta > 0 && state.playbackSpeed > 0f) {
+            state.position + (delta * state.playbackSpeed).toLong()
+        } else {
+            state.position
+        }
     }
 
     private fun startTicker() {

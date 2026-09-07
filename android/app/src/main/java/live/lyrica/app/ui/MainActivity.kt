@@ -1,8 +1,12 @@
 package live.lyrica.app.ui
 
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.service.notification.NotificationListenerService
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContent
@@ -30,20 +34,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import live.lyrica.app.mediasession.LyricaMediaSessionListenerService
 import live.lyrica.app.provider.ProviderRegistry
 import live.lyrica.app.security.SecureTokenStorage
 import live.lyrica.app.service.LyricaForegroundService
 
 class MainActivity : ComponentActivity() {
     private lateinit var storage: SecureTokenStorage
+    private val isPermissionGrantedState = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         storage = SecureTokenStorage(this)
+        checkAndStartServices()
+
         setContent {
             LyricaTheme {
                 MainScreen(
                     storage = storage,
+                    isPermissionGranted = isPermissionGrantedState.value,
                     onGrantPermission = { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
                     onOpenFullLyrics  = { startActivity(Intent(this, FullLyricsActivity::class.java)) },
                     onOpenDebugLogs   = { startActivity(Intent(this, DebugLogActivity::class.java)) }
@@ -51,12 +60,49 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        checkAndStartServices()
+    }
+
+    private fun checkAndStartServices() {
+        val granted = isNotificationAccessGranted(this)
+        isPermissionGrantedState.value = granted
+
+        if (granted) {
+            // Start foreground service if not already running
+            val fgIntent = Intent(this, LyricaForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(fgIntent)
+            } else {
+                startService(fgIntent)
+            }
+
+            // Re-bind notification listener if app was killed and restored
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    NotificationListenerService.requestRebind(
+                        ComponentName(this, LyricaMediaSessionListenerService::class.java)
+                    )
+                } catch (_: Exception) {}
+            }
+            LyricaMediaSessionListenerService.instance?.requestActiveSessionsRefresh()
+        }
+    }
+
+    private fun isNotificationAccessGranted(context: Context): Boolean {
+        val pkgName = context.packageName
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: ""
+        return flat.contains(pkgName)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     storage: SecureTokenStorage,
+    isPermissionGranted: Boolean,
     onGrantPermission: () -> Unit,
     onOpenFullLyrics: () -> Unit,
     onOpenDebugLogs: () -> Unit
@@ -102,8 +148,8 @@ fun MainScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ── 1. Permission Card (hidden when running) ───────────────────
-            AnimatedVisibility(!isRunning, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+            // ── 1. Permission Card (only shown when permission is actually NOT granted) ──
+            AnimatedVisibility(!isPermissionGranted, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                 LyricaCard {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -187,15 +233,16 @@ fun MainScreen(
                     }
                     Spacer(Modifier.height(10.dp))
 
-                    if (track != null) {
+                    val currentTrack = track
+                    if (currentTrack != null) {
                         Text(
-                            track!!.rawTitle.ifBlank { track!!.title },
+                            currentTrack.rawTitle.ifBlank { currentTrack.title },
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = LabelPrimary
                         )
                         Text(
-                            track!!.rawArtist.ifBlank { track!!.artist },
+                            currentTrack.rawArtist.ifBlank { currentTrack.artist },
                             fontSize = 14.sp,
                             color = LabelSecondary
                         )

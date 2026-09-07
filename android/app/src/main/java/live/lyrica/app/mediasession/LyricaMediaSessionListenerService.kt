@@ -23,7 +23,11 @@ import live.lyrica.app.service.LyricaForegroundService
  */
 class LyricaMediaSessionListenerService : NotificationListenerService() {
 
-    private val TAG = "MediaSessionListener"
+    companion object {
+        private const val TAG = "MediaSessionListener"
+        var instance: LyricaMediaSessionListenerService? = null
+            private set
+    }
 
     private var mediaSessionManager: MediaSessionManager? = null
     private val sessionListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
@@ -32,6 +36,7 @@ class LyricaMediaSessionListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instance = this
         LyricaLogger.i(TAG, "NotificationListener connected — starting foreground service")
 
         // Start the foreground service now that we have listener access
@@ -58,6 +63,7 @@ class LyricaMediaSessionListenerService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        instance = null
         LyricaLogger.i(TAG, "NotificationListener disconnected")
         try {
             mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionListener)
@@ -68,6 +74,16 @@ class LyricaMediaSessionListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) = Unit
     override fun onNotificationRemoved(sbn: StatusBarNotification?) = Unit
 
+    fun requestActiveSessionsRefresh() {
+        try {
+            val componentName = ComponentName(this, LyricaMediaSessionListenerService::class.java)
+            val controllers = mediaSessionManager?.getActiveSessions(componentName)
+            updateActiveController(controllers)
+        } catch (e: Exception) {
+            LyricaLogger.w(TAG, "Error refreshing active sessions: ${e.message}")
+        }
+    }
+
     private fun updateActiveController(controllers: List<MediaController>?) {
         val fgService = LyricaForegroundService.instance
 
@@ -77,10 +93,12 @@ class LyricaMediaSessionListenerService : NotificationListenerService() {
             return
         }
 
-        // Pick the first (most recently active) media controller
-        val best = controllers.firstOrNull()
+        // Prefer the controller that is actually currently PLAYING, otherwise pick the first
+        val best = controllers.firstOrNull { it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }
+            ?: controllers.firstOrNull()
+
         if (best != null) {
-            LyricaLogger.d(TAG, "Active media session: ${best.packageName}")
+            LyricaLogger.d(TAG, "Active media session: ${best.packageName} (state=${best.playbackState?.state})")
             fgService?.onMediaControllerAvailable(best)
         } else {
             fgService?.onNoMediaController()
