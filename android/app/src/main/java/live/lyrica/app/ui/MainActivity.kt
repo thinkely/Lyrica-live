@@ -163,13 +163,28 @@ fun MainScreen(
             // ── 2. Now Playing Card ────────────────────────────────────────
             LyricaCard {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "NOW PLAYING",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = AppleRed,
-                        letterSpacing = 1.sp
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "NOW PLAYING",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AppleRed,
+                            letterSpacing = 1.sp
+                        )
+                        if (track != null) {
+                            Text(
+                                if (isPlaying) "PLAYING" else "PAUSED",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isPlaying) Color(0xFF2E7D32) else LabelTertiary,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(10.dp))
 
                     if (track != null) {

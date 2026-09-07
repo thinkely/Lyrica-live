@@ -53,7 +53,6 @@ fun DebugLogScreen(onBack: () -> Unit) {
     var autoScroll by remember { mutableStateOf(true) }
 
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         while (true) {

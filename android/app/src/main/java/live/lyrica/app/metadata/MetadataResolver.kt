@@ -7,35 +7,33 @@ import live.lyrica.app.core.model.TrackQuery
  *
  * Android MediaSession metadata is notoriously dirty:
  *   - "Blinding Lights (Official Video)" → "Blinding Lights"
+ *   - "Starboy [4K Remastered] ft. Daft Punk" → "Starboy"
+ *   - "Lady Gaga, Bruno Mars - Die With A Smile (Official Music Video)" → "Die With A Smile"
  *   - "The Weeknd VEVO" → "The Weeknd"
  *   - "Song feat. Artist" → "Song"
  *   - "Track - Remastered 2021" → "Track"
- *
- * Strategy:
- *   1. Clean artist name
- *   2. Clean title
- *   3. Return both cleaned and raw values (raw kept for fallback queries)
  */
 object MetadataResolver {
 
-    // ── Title cleaning patterns ────────────────────────────────────────────
-    private val TITLE_STRIP_PATTERNS = listOf(
-        Regex("""\s*[\(\[](feat\.?|ft\.?|with|prod\.?|produced by)[^\)\]]*[\)\]]""", RegexOption.IGNORE_CASE),
-        Regex("""\s*[\(\[](official\s*(music\s*)?video|lyric\s*video|audio|visualizer|animated|performance|live)[^\)\]]*[\)\]]""", RegexOption.IGNORE_CASE),
-        Regex("""\s*[\(\[](remaster(ed)?(\s+\d{4})?)[^\)\]]*[\)\]]""", RegexOption.IGNORE_CASE),
-        Regex("""\s*[\(\[](explicit|clean|radio\s*edit|extended|bonus\s*track|album\s*version)[^\)\]]*[\)\]]""", RegexOption.IGNORE_CASE),
+    // ── Bracket & tag stripping patterns ──────────────────────────────────
+    private val BRACKET_NOISE_PATTERN = Regex(
+        """\s*[\(\[][^\)\]]*(official|video|audio|remaster|4k|hd|live|visualizer|lyric|explicit|clean|edit|version|feat|ft\.|prod|deluxe|bonus|soundtrack|ost)[^\)\]]*[\)\]]""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private val TITLE_STRIP_SUFFIXES = listOf(
         Regex("""\s*-\s*(remaster(ed)?(\s+\d{4})?)\s*$""", RegexOption.IGNORE_CASE),
-        Regex("""\s*-\s*(official\s*(music\s*)?video|lyric\s*video|audio)\s*$""", RegexOption.IGNORE_CASE),
-        Regex("""\s*(feat\.?|ft\.?)\s+.+$""", RegexOption.IGNORE_CASE),
+        Regex("""\s*-\s*(official\s*(music\s*)?video|lyric\s*video|audio|live(\s*version)?)\s*$""", RegexOption.IGNORE_CASE),
+        Regex("""\s*(feat\.?|ft\.?)\s+.+$""", RegexOption.IGNORE_CASE)
     )
 
     // ── Artist cleaning patterns ───────────────────────────────────────────
     private val ARTIST_STRIP_PATTERNS = listOf(
-        Regex("""\s*(VEVO|Official|Music)\s*$""", RegexOption.IGNORE_CASE),
+        Regex("""\s*(VEVO|Official|Music|Topic)\s*$""", RegexOption.IGNORE_CASE),
         Regex("""\s*[\(\[].*?[\)\]]"""),             // anything in brackets
-        Regex("""\s*,\s*.+$"""),                      // strip "Artist, OtherArtist"
-        Regex("""\s*&\s*.+$"""),                      // strip "Artist & OtherArtist"  — keep primary
-        Regex("""\s*(feat\.?|ft\.?|with)\s+.+$""", RegexOption.IGNORE_CASE),
+        Regex("""\s*,\s*.+$"""),                      // strip "Artist, OtherArtist" -> primary
+        Regex("""\s*&\s*.+$"""),                      // strip "Artist & OtherArtist" -> primary
+        Regex("""\s*(feat\.?|ft\.?|with|prod\.?)\s+.+$""", RegexOption.IGNORE_CASE)
     )
 
     // ── Noise indicators (title is probably unreliable) ───────────────────
@@ -54,8 +52,8 @@ object MetadataResolver {
         durationMs: Long = 0L,
         playerPackage: String? = null
     ): TrackQuery {
-        val cleanTitle = cleanTitle(rawTitle ?: "")
         val cleanArtist = cleanArtist(rawArtist ?: "")
+        val cleanTitle = cleanTitle(rawTitle ?: "", cleanArtist)
 
         return TrackQuery(
             artist = cleanArtist,
@@ -68,15 +66,40 @@ object MetadataResolver {
         )
     }
 
-    private fun cleanTitle(raw: String): String {
+    private fun cleanTitle(raw: String, cleanArtist: String): String {
         var title = raw.trim()
-        for (pattern in TITLE_STRIP_PATTERNS) {
+
+        // 1. Remove bracketed noise tags (repeat to catch chained brackets)
+        while (BRACKET_NOISE_PATTERN.containsMatchIn(title)) {
+            title = BRACKET_NOISE_PATTERN.replace(title, "").trim()
+        }
+
+        // 2. Remove trailing suffix markers
+        for (pattern in TITLE_STRIP_SUFFIXES) {
             title = pattern.replace(title, "").trim()
         }
-        // Collapse multiple spaces
+
+        // 3. Handle YouTube-style "Artist - Title" embedded in title field
+        if (title.contains(" - ") || title.contains(" — ") || title.contains(" – ")) {
+            val parts = title.split(Regex("""\s+[-—–]\s+"""))
+            if (parts.size >= 2) {
+                val left = parts[0].trim()
+                val right = parts.subList(1, parts.size).joinToString(" - ").trim()
+
+                // If left matches the artist or contains multi-artists, right is the song title
+                if (cleanArtist.isNotBlank() && (left.contains(cleanArtist, ignoreCase = true) || cleanArtist.contains(left, ignoreCase = true))) {
+                    title = right
+                } else if (left.contains(",") || left.contains("&") || left.contains("ft.", ignoreCase = true)) {
+                    // Likely artist list on left e.g. "Lady Gaga, Bruno Mars - Die With A Smile"
+                    title = right
+                }
+            }
+        }
+
+        // 4. Collapse multiple whitespace & strip residual punctuation
         title = title.replace(Regex("\\s{2,}"), " ").trim()
-        // Strip trailing punctuation left behind
-        title = title.trimEnd('-', '—', '–', ',', '.').trim()
+        title = title.trimEnd('-', '—', '–', ',', '.', ':').trim()
+
         return if (title.lowercase() in TITLE_NOISE) raw.trim() else title
     }
 
