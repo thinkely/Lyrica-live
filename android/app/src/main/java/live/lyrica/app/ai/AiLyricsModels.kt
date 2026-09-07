@@ -77,3 +77,20 @@ object AiLanguages {
         "Vietnamese"
     )
 }
+
+/**
+ * Automatic background AI processing mode for incoming songs.
+ */
+enum class AutoAiMode(val id: String, val displayName: String) {
+    OFF("off", "Off (Original)"),
+    AUTO_TRANSLATE("auto_translate", "Auto-Translate"),
+    AUTO_ROMANIZE("auto_romanize", "Auto-Romanize");
+
+    companion object {
+        fun fromId(id: String?): AutoAiMode = when (id?.lowercase()) {
+            "auto_translate" -> AUTO_TRANSLATE
+            "auto_romanize" -> AUTO_ROMANIZE
+            else -> OFF
+        }
+    }
+}

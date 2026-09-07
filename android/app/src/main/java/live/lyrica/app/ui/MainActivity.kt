@@ -355,7 +355,8 @@ fun MainScreen(
                     Spacer(Modifier.height(8.dp))
 
                     // AI Translation & Romanization section
-                    val aiService = remember { live.lyrica.app.ai.AiLyricsService(storage) }
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val aiService = remember { live.lyrica.app.ai.AiLyricsService(context) }
                     var showAiDialog by remember { mutableStateOf(false) }
 
                     if (showAiDialog) {

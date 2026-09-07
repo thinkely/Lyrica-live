@@ -277,12 +277,35 @@ class LyricaForegroundService : Service() {
             } else {
                 LyricaLogger.i(TAG, "No synced lyrics found for '${query.artist} - ${query.title}'")
             }
-            // Update notification on main thread
+            // Update notification on main thread immediately with original lyrics (zero latency fallback)
             handler.post {
                 val pos = estimatePosition()
                 val syncState = LyricsSyncEngine.resolveSyncState(doc, pos)
                 _syncStateFlow.value = syncState
                 notifManager.update(query, doc, syncState, isPlaying)
+            }
+
+            // If Auto-AI is enabled and lyrics found, asynchronously fetch/load translation
+            if (doc != null && doc.lines.isNotEmpty()) {
+                val aiService = live.lyrica.app.ai.AiLyricsService(applicationContext)
+                val autoMode = aiService.getAutoAiMode()
+                if (autoMode != live.lyrica.app.ai.AutoAiMode.OFF && aiService.hasKeyForSelectedProvider()) {
+                    val isRomanize = autoMode == live.lyrica.app.ai.AutoAiMode.AUTO_ROMANIZE
+                    val targetLang = aiService.getPreferredLanguage()
+                    val aiResult = aiService.translateOrRomanize(doc, targetLang, isRomanize)
+                    if (isActive && aiResult.isSuccess && _currentQueryFlow.value?.cacheKey == query.cacheKey) {
+                        val aiDoc = aiResult.getOrNull()
+                        if (aiDoc != null) {
+                            _currentLyricsFlow.value = aiDoc
+                            handler.post {
+                                val pos = estimatePosition()
+                                val syncState = LyricsSyncEngine.resolveSyncState(aiDoc, pos)
+                                _syncStateFlow.value = syncState
+                                notifManager.update(query, aiDoc, syncState, isPlaying)
+                            }
+                        }
+                    }
+                }
             }
         }
     }

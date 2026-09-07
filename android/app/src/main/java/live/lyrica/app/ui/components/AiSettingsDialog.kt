@@ -274,6 +274,27 @@ fun AiSettingsDialog(
                 )
             )
 
+            // Auto AI Processing Mode
+            Text("AUTO-AI FOR INCOMING SONGS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AppleRed, letterSpacing = 1.sp)
+            var autoAiMode by remember { mutableStateOf(aiService.getAutoAiMode()) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                live.lyrica.app.ai.AutoAiMode.values().forEach { mode ->
+                    val isSelected = autoAiMode == mode
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { autoAiMode = mode },
+                        label = { Text(mode.displayName, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AppleRed.copy(alpha = 0.15f),
+                            selectedLabelColor = AppleRed
+                        )
+                    )
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
 
             // Save Button
@@ -283,6 +304,7 @@ fun AiSettingsDialog(
                     aiService.setApiKey(selectedProvider, apiKey)
                     aiService.setSelectedModel(selectedProvider, selectedModel)
                     aiService.setPreferredLanguage(preferredLang)
+                    aiService.setAutoAiMode(autoAiMode)
                     onSaved()
                     onDismiss()
                 },

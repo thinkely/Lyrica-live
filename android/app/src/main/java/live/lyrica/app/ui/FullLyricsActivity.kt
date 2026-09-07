@@ -50,7 +50,7 @@ class FullLyricsActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        aiService = AiLyricsService(SecureTokenStorage(this))
+        aiService = AiLyricsService(this)
         setContent {
             LyricaTheme {
                 FullLyricsScreen(

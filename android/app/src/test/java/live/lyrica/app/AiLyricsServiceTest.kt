@@ -2,6 +2,7 @@ package live.lyrica.app
 
 import live.lyrica.app.ai.AiLanguages
 import live.lyrica.app.ai.AiProvider
+import live.lyrica.app.ai.AutoAiMode
 import live.lyrica.app.core.model.LyricLine
 import live.lyrica.app.core.model.LyricsDocument
 import live.lyrica.app.core.model.SyncPrecision
@@ -28,6 +29,14 @@ class AiLyricsServiceTest {
         assertTrue(AiLanguages.POPULAR_LANGUAGES.contains("Spanish"))
         assertTrue(AiLanguages.POPULAR_LANGUAGES.contains("Japanese"))
         assertTrue(AiLanguages.POPULAR_LANGUAGES.contains("Punjabi"))
+    }
+
+    @Test
+    fun testAutoAiModes() {
+        assertEquals(AutoAiMode.OFF, AutoAiMode.fromId("off"))
+        assertEquals(AutoAiMode.AUTO_TRANSLATE, AutoAiMode.fromId("auto_translate"))
+        assertEquals(AutoAiMode.AUTO_ROMANIZE, AutoAiMode.fromId("auto_romanize"))
+        assertEquals(AutoAiMode.OFF, AutoAiMode.fromId("invalid_value"))
     }
 
     @Test
