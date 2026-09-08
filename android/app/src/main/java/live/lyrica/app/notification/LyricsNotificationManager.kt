@@ -82,8 +82,40 @@ class LyricsNotificationManager(private val context: Context) {
             val builder = buildNotification(query, doc, syncState, isPlaying)
             nm.notify(NOTIFICATION_ID, builder.build())
         } catch (e: Exception) {
-            LyricaLogger.e(TAG, "Notification update failed: ${e.message}", e)
+            LyricaLogger.e(TAG, "Notification custom view update failed: ${e.message}", e)
+            try {
+                // Fallback to standard system notification style if custom view inflation fails
+                val fallback = buildFallbackNotification(query, doc, syncState, isPlaying)
+                nm.notify(NOTIFICATION_ID, fallback.build())
+            } catch (fallbackEx: Exception) {
+                LyricaLogger.e(TAG, "Fallback notification also failed: ${fallbackEx.message}", fallbackEx)
+            }
         }
+    }
+
+    private fun buildFallbackNotification(
+        query: TrackQuery?,
+        doc: LyricsDocument?,
+        syncState: SyncState,
+        isPlaying: Boolean
+    ): NotificationCompat.Builder {
+        val currentText = syncState.currentLine?.text ?: "Lyrica Live is active"
+        val openIntent = Intent(context, FullLyricsActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openPi = PendingIntent.getActivity(
+            context, 0, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_lyrics_notification)
+            .setContentTitle(if (query != null) "${query.artist} - ${query.title}" else "Lyrica Live")
+            .setContentText(currentText)
+            .setContentIntent(openPi)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setShowWhen(false)
     }
 
     private fun buildNotification(
