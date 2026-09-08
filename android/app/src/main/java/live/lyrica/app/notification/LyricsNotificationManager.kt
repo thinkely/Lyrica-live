@@ -142,7 +142,14 @@ class LyricsNotificationManager(private val context: Context) {
 
         val prevText = syncState.previousLine?.text ?: ""
         val nextText = syncState.nextLine?.text ?: ""
-        val providerBadge = doc?.provider?.uppercase() ?: if (query != null) "SEARCHING" else "LYRICA"
+        // Derive a clean mode badge from the provider string
+        val providerBadge = when {
+            doc == null && query != null -> "SEARCHING"
+            doc == null -> "LYRICA"
+            doc.provider.contains("Romanized", ignoreCase = true) -> "ROMANIZED"
+            doc.provider.contains("Translated", ignoreCase = true) -> "TRANSLATED"
+            else -> doc.provider.substringBefore(" ").uppercase().take(12)
+        }
 
         // ── PendingIntents ─────────────────────────────────────────────────
         val openIntent = Intent(context, FullLyricsActivity::class.java).apply {
@@ -173,10 +180,7 @@ class LyricsNotificationManager(private val context: Context) {
         // ── 2. Expanded RemoteViews ─────────────────────────────────────────
         val expandedViews = RemoteViews(context.packageName, R.layout.notification_lyrics_expanded).apply {
             setTextViewText(R.id.notif_expanded_prev_line, prevText)
-            setTextViewText(
-                R.id.notif_expanded_current_line,
-                if (syncState.currentLine != null) "▶ $currentText" else currentText
-            )
+            setTextViewText(R.id.notif_expanded_current_line, currentText)
             setTextViewText(R.id.notif_expanded_next_line, nextText)
             setTextViewText(R.id.notif_mode_badge, providerBadge)
             setTextViewText(R.id.notif_btn_play_pause, if (isPlaying) "Pause" else "Play")
