@@ -373,7 +373,7 @@ fun MainScreen(
                     } else {
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                            horizontalAlignment = Alignment.CenterAlignmentLine
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
                                 if (isRunning) "No media playing — start Spotify, YouTube Music, or any player."

@@ -30,7 +30,7 @@ import java.security.MessageDigest
  *
  * Caching:
  *  - High-performance in-memory LruCache (50 entries)
- *  - Persistent disk cache in cache/cover_art/*.jpg
+ *  - Persistent disk cache in cache/cover_art directory
  */
 class HdCoverArtResolver(
     private val context: Context,
@@ -88,7 +88,7 @@ class HdCoverArtResolver(
                             return@withContext bmp
                         }
                     }
-                } catch (_: Exception) {}
+                } catch (ignored: Exception) {}
             }
         }
 

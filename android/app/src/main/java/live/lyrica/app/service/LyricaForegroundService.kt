@@ -385,8 +385,8 @@ class LyricaForegroundService : Service() {
 
     private fun estimatePosition(): Long {
         val state = activeController?.playbackState ?: return lastPositionMs
-        val offset = storage.getFloat("sync_offset_ms", 0f).toLong()
-        val rawPos = if (state.state != PlaybackState.STATE_PLAYING) {
+        val offset: Long = storage.getFloat("sync_offset_ms", 0f).toLong()
+        val rawPos: Long = if (state.state != PlaybackState.STATE_PLAYING) {
             state.position
         } else {
             val delta = android.os.SystemClock.elapsedRealtime() - state.lastPositionUpdateTime
@@ -396,7 +396,8 @@ class LyricaForegroundService : Service() {
                 state.position
             }
         }
-        return maxOf(0L, rawPos + offset)
+        val adjusted: Long = rawPos + offset
+        return if (adjusted < 0L) 0L else adjusted
     }
 
     private fun startTicker() {

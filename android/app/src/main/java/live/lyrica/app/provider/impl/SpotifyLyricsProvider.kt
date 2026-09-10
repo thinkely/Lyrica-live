@@ -42,7 +42,7 @@ class SpotifyLyricsProvider(
         return !spDc.isNullOrBlank()
     }
 
-    override suspend fun resolve(query: TrackQuery): LyricsDocument? {
+    override suspend fun search(query: TrackQuery): LyricsDocument? {
         val spDc = storage.getString(KEY_SP_DC) ?: return null
 
         try {
@@ -53,8 +53,7 @@ class SpotifyLyricsProvider(
             LyricaLogger.d(TAG, "Resolved Spotify Track ID: $trackId for '${query.title}'")
 
             // 2. Query Color Lyrics endpoint
-            val lyricsDoc = fetchColorLyrics(trackId, query, token)
-            return lyricsDoc
+            return fetchColorLyrics(trackId, query, token)
         } catch (e: Exception) {
             LyricaLogger.w(TAG, "Spotify lyrics fetch error for '${query.title}': ${e.message}")
             return null

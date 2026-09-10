@@ -136,12 +136,28 @@ class SecureTokenStorage(private val context: Context) {
         prefs.edit().remove(key).apply()
     }
 
-    // ── Plain boolean helpers (for non-sensitive preferences) ─────────────
+    // ── Plain preference helpers ───────────────────────────────────────────
     fun putBoolean(key: String, value: Boolean) {
         prefs.edit().putBoolean(key, value).apply()
     }
 
     fun getBoolean(key: String, default: Boolean = false): Boolean {
         return prefs.getBoolean(key, default)
+    }
+
+    fun putLong(key: String, value: Long) {
+        prefs.edit().putLong(key, value).apply()
+    }
+
+    fun getLong(key: String, default: Long = 0L): Long {
+        return prefs.getLong(key, default)
+    }
+
+    fun putFloat(key: String, value: Float) {
+        prefs.edit().putFloat(key, value).apply()
+    }
+
+    fun getFloat(key: String, default: Float = 0f): Float {
+        return prefs.getFloat(key, default)
     }
 }
