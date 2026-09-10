@@ -23,13 +23,17 @@ import live.lyrica.app.engine.SyncState
 import live.lyrica.app.ui.FullLyricsActivity
 
 /**
- * Manages the persistent lyrics notification with dark glassmorphism RemoteViews.
+ * Manages the persistent lyrics notification — MusicXMatch style.
  *
  * Design:
- *   - Collapsed: High-res rounded album art, "Lyrica Live" badge, bold white active lyric, and Artist — Title.
- *   - Expanded: Multi-line lyrics preview window (prev line, active line with red vertical indicator bar,
- *               upcoming lines with cascading opacity, right scrollbar track, audio wave provider badge).
- *               No duplicate transport controls for distraction-free listening.
+ *   - Collapsed: Rounded album art | bold song title | current lyric line.
+ *   - Expanded:  Album art header + source badge, then a large bold active lyric
+ *               followed by cascading faded upcoming lines (no transport controls —
+ *               the OS media player handles that).
+ *
+ * Key: NO DecoratedCustomViewStyle — that wrapper was causing the "notification
+ * inside a notification" look. We use raw custom views on a transparent background
+ * so the OS draws its own notification surface naturally.
  */
 class LyricsNotificationManager(private val context: Context) {
     private val TAG = "NotifManager"
@@ -64,8 +68,8 @@ class LyricsNotificationManager(private val context: Context) {
 
     fun buildInitialNotification(): android.app.Notification {
         val collapsed = RemoteViews(context.packageName, R.layout.notification_lyrics_collapsed).apply {
-            setTextViewText(R.id.notif_collapsed_active_line, "♪ Lyrica Live is active")
-            setTextViewText(R.id.notif_collapsed_track_info, "Waiting for music…")
+            setTextViewText(R.id.notif_collapsed_track_info, "Lyrica Live")
+            setTextViewText(R.id.notif_collapsed_active_line, "♪ Waiting for music…")
         }
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
@@ -189,9 +193,10 @@ class LyricsNotificationManager(private val context: Context) {
         )
 
         // ── 1. Collapsed RemoteViews ───────────────────────────────────────
+        // Track info (bold) on top, current lyric line beneath it.
         val collapsedViews = RemoteViews(context.packageName, R.layout.notification_lyrics_collapsed).apply {
-            setTextViewText(R.id.notif_collapsed_active_line, currentText)
             setTextViewText(R.id.notif_collapsed_track_info, trackInfo)
+            setTextViewText(R.id.notif_collapsed_active_line, currentText)
 
             if (roundedArt != null) {
                 setImageViewBitmap(R.id.notif_collapsed_art, roundedArt)
@@ -222,11 +227,14 @@ class LyricsNotificationManager(private val context: Context) {
             setOnClickPendingIntent(R.id.notif_expanded_root, openPi)
         }
 
+        // NOTE: No DecoratedCustomViewStyle — that was causing the "notification inside
+        // notification" look by wrapping our custom view inside a system chrome frame.
+        // We set the large icon for the system chrome header (small icon area).
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lyrics_notification)
+            .setLargeIcon(roundedArt)
             .setCustomContentView(collapsedViews)
             .setCustomBigContentView(expandedViews)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setContentIntent(openPi)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

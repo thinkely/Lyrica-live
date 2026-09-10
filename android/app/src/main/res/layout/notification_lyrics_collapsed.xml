@@ -1,60 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Collapsed notification layout — MusicXMatch style.
+  Uses transparent background so the OS draws its own notification surface.
+  No custom card/rounded container — blends naturally with the system shade.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/notif_collapsed_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/bg_notification_card"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:paddingStart="12dp"
-    android:paddingTop="10dp"
-    android:paddingEnd="12dp"
-    android:paddingBottom="10dp">
+    android:paddingStart="4dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="6dp">
 
-    <!-- Album Art -->
+    <!-- Album Art — rounded, compact -->
     <ImageView
         android:id="@+id/notif_collapsed_art"
         android:layout_width="46dp"
         android:layout_height="46dp"
         android:background="@drawable/bg_album_art_rounded"
         android:contentDescription="Album Art"
-        android:padding="2dp"
         android:scaleType="centerCrop"
         android:src="@drawable/ic_lyrics_notification" />
 
-    <!-- Content column: Badge header, bold active lyric, artist & title -->
+    <!-- Content: Song title, artist, current lyric -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="6dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="4dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <!-- App Brand Header -->
-        <LinearLayout
-            android:layout_width="wrap_content"
+        <!-- Song title — bold, prominent -->
+        <TextView
+            android:id="@+id/notif_collapsed_track_info"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Lyrica Live"
+            android:textColor="@android:color/white"
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
-            <ImageView
-                android:layout_width="12dp"
-                android:layout_height="12dp"
-                android:contentDescription=""
-                android:src="@drawable/ic_lyrica_badge" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="5dp"
-                android:text="Lyrica Live"
-                android:textColor="#8E92A0"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <!-- Active Lyric Line in crisp white -->
+        <!-- Current lyric line — muted, smaller -->
         <TextView
             android:id="@+id/notif_collapsed_active_line"
             android:layout_width="match_parent"
@@ -63,28 +55,9 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="♪ Waiting for music…"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textColor="#B0B0B0"
+            android:textSize="12sp" />
 
-        <!-- Track info: Artist — Title -->
-        <TextView
-            android:id="@+id/notif_collapsed_track_info"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="1dp"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="Lyrica Live"
-            android:textColor="#8E92A0"
-            android:textSize="11sp" />
     </LinearLayout>
-
-    <!-- Expand Chevron -->
-    <ImageView
-        android:layout_width="18dp"
-        android:layout_height="18dp"
-        android:contentDescription="Expand"
-        android:src="@drawable/ic_chevron_down" />
 
 </LinearLayout>
