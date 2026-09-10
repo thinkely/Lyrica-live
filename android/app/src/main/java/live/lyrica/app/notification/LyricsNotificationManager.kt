@@ -162,6 +162,9 @@ class LyricsNotificationManager(private val context: Context) {
             "Lyrica Live"
         }
 
+        val lines = doc?.lines ?: emptyList()
+        val idx = syncState.lineIndex
+
         val prevLine = if (idx > 0 && idx < lines.size) lines[idx - 1] else null
         val currLine = if (idx >= 0 && idx < lines.size) lines[idx] else null
         val nextLine1 = if (idx >= 0 && idx + 1 < lines.size) lines[idx + 1] else if (idx < 0 && lines.isNotEmpty()) lines.getOrNull(0) else null
