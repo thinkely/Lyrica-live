@@ -5,6 +5,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Build
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -13,16 +20,16 @@ import live.lyrica.app.core.logging.LyricaLogger
 import live.lyrica.app.core.model.LyricsDocument
 import live.lyrica.app.core.model.TrackQuery
 import live.lyrica.app.engine.SyncState
-import live.lyrica.app.service.LyricaForegroundService
 import live.lyrica.app.ui.FullLyricsActivity
 
 /**
- * Manages the persistent lyrics notification with custom RemoteViews.
+ * Manages the persistent lyrics notification with dark glassmorphism RemoteViews.
  *
  * Design:
- *   - Collapsed: Custom white card layout with active lyric line in bold Apple Red (#FA233B).
- *   - Expanded: Compact 3-line layout (Previous, bold Red Current, Next) with compact
- *               Prev/Play-Pause/Next buttons (within the 252dp height cap on Android 12+).
+ *   - Collapsed: High-res rounded album art, "Lyrica Live" badge, bold white active lyric, and Artist — Title.
+ *   - Expanded: Multi-line lyrics preview window (prev line, active line with red vertical indicator bar,
+ *               upcoming lines with cascading opacity, right scrollbar track, audio wave provider badge).
+ *               No duplicate transport controls for distraction-free listening.
  */
 class LyricsNotificationManager(private val context: Context) {
     private val TAG = "NotifManager"
@@ -57,8 +64,8 @@ class LyricsNotificationManager(private val context: Context) {
 
     fun buildInitialNotification(): android.app.Notification {
         val collapsed = RemoteViews(context.packageName, R.layout.notification_lyrics_collapsed).apply {
-            setTextViewText(R.id.notif_collapsed_active_line, "Lyrica Live is active")
-            setTextViewText(R.id.notif_collapsed_source, "Waiting for music…")
+            setTextViewText(R.id.notif_collapsed_active_line, "♪ Lyrica Live is active")
+            setTextViewText(R.id.notif_collapsed_track_info, "Waiting for music…")
         }
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
@@ -76,10 +83,11 @@ class LyricsNotificationManager(private val context: Context) {
         query: TrackQuery?,
         doc: LyricsDocument?,
         syncState: SyncState,
-        isPlaying: Boolean
+        isPlaying: Boolean,
+        albumArt: Bitmap? = null
     ) {
         try {
-            val builder = buildNotification(query, doc, syncState, isPlaying)
+            val builder = buildNotification(query, doc, syncState, isPlaying, albumArt)
             nm.notify(NOTIFICATION_ID, builder.build())
         } catch (e: Exception) {
             LyricaLogger.e(TAG, "Notification custom view update failed: ${e.message}", e)
@@ -109,7 +117,7 @@ class LyricsNotificationManager(private val context: Context) {
         )
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lyrics_notification)
-            .setContentTitle(if (query != null) "${query.artist} - ${query.title}" else "Lyrica Live")
+            .setContentTitle(if (query != null) "${query.artist} — ${query.title}" else "Lyrica Live")
             .setContentText(currentText)
             .setContentIntent(openPi)
             .setOngoing(true)
@@ -122,7 +130,8 @@ class LyricsNotificationManager(private val context: Context) {
         query: TrackQuery?,
         doc: LyricsDocument?,
         syncState: SyncState,
-        isPlaying: Boolean
+        isPlaying: Boolean,
+        albumArt: Bitmap?
     ): NotificationCompat.Builder {
 
         // ── Text resolutions ───────────────────────────────────────────────
@@ -140,16 +149,35 @@ class LyricsNotificationManager(private val context: Context) {
             else -> "Waiting for music…"
         }
 
-        val prevText = syncState.previousLine?.text ?: ""
-        val nextText = syncState.nextLine?.text ?: ""
-        // Derive a clean mode badge from the provider string
+        val trackInfo = if (query != null && query.title.isNotBlank()) {
+            val artist = query.rawArtist.ifBlank { query.artist }
+            val title = query.rawTitle.ifBlank { query.title }
+            if (artist.isNotBlank()) "$artist — $title" else title
+        } else {
+            "Lyrica Live"
+        }
+
+        val lines = doc?.lines ?: emptyList()
+        val idx = syncState.lineIndex
+
+        val prevText = if (idx > 0 && idx < lines.size) lines[idx - 1].text else ""
+        val nextText1 = if (idx >= 0 && idx + 1 < lines.size) lines[idx + 1].text else if (idx < 0 && lines.isNotEmpty()) lines.getOrNull(0)?.text ?: "" else ""
+        val nextText2 = if (idx >= 0 && idx + 2 < lines.size) lines[idx + 2].text else if (idx < 0 && lines.size > 1) lines.getOrNull(1)?.text ?: "" else ""
+        val nextText3 = if (idx >= 0 && idx + 3 < lines.size) lines[idx + 3].text else if (idx < 0 && lines.size > 2) lines.getOrNull(2)?.text ?: "" else ""
+        val nextText4 = if (idx >= 0 && idx + 4 < lines.size) lines[idx + 4].text else if (idx < 0 && lines.size > 3) lines.getOrNull(3)?.text ?: "" else ""
+
+        // Derive clean provider / mode badge
         val providerBadge = when {
             doc == null && query != null -> "SEARCHING"
             doc == null -> "LYRICA"
             doc.provider.contains("Romanized", ignoreCase = true) -> "ROMANIZED"
             doc.provider.contains("Translated", ignoreCase = true) -> "TRANSLATED"
+            doc.provider.contains("spotify", ignoreCase = true) -> "SPOTIFY"
             else -> doc.provider.substringBefore(" ").uppercase().take(12)
         }
+
+        // Rounded album art
+        val roundedArt = albumArt?.let { getRoundedCornerBitmap(it, 16f) }
 
         // ── PendingIntents ─────────────────────────────────────────────────
         val openIntent = Intent(context, FullLyricsActivity::class.java).apply {
@@ -160,43 +188,38 @@ class LyricsNotificationManager(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val togglePi = togglePlayPendingIntent()
-
         // ── 1. Collapsed RemoteViews ───────────────────────────────────────
         val collapsedViews = RemoteViews(context.packageName, R.layout.notification_lyrics_collapsed).apply {
             setTextViewText(R.id.notif_collapsed_active_line, currentText)
-            setTextViewText(
-                R.id.notif_collapsed_source,
-                if (query != null) "${query.artist} - ${query.title}" else "Lyrica Live"
-            )
-            setImageViewResource(
-                R.id.notif_collapsed_btn_play_pause,
-                if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-            )
-            setOnClickPendingIntent(R.id.notif_collapsed_btn_play_pause, togglePi)
+            setTextViewText(R.id.notif_collapsed_track_info, trackInfo)
+
+            if (roundedArt != null) {
+                setImageViewBitmap(R.id.notif_collapsed_art, roundedArt)
+            } else {
+                setImageViewResource(R.id.notif_collapsed_art, R.drawable.ic_lyrics_notification)
+            }
+
             setOnClickPendingIntent(R.id.notif_collapsed_root, openPi)
         }
 
-        // ── 2. Expanded RemoteViews ─────────────────────────────────────────
+        // ── 2. Expanded RemoteViews (Multi-line preview) ─────────────────────
         val expandedViews = RemoteViews(context.packageName, R.layout.notification_lyrics_expanded).apply {
-            setTextViewText(R.id.notif_expanded_prev_line, prevText)
-            setTextViewText(R.id.notif_expanded_current_line, currentText)
-            setTextViewText(R.id.notif_expanded_next_line, nextText)
+            setTextViewText(R.id.notif_expanded_track_info, trackInfo)
+            setTextViewText(R.id.notif_expanded_line_prev, prevText)
+            setTextViewText(R.id.notif_expanded_line_curr, currentText)
+            setTextViewText(R.id.notif_expanded_line_next1, nextText1)
+            setTextViewText(R.id.notif_expanded_line_next2, nextText2)
+            setTextViewText(R.id.notif_expanded_line_next3, nextText3)
+            setTextViewText(R.id.notif_expanded_line_next4, nextText4)
             setTextViewText(R.id.notif_mode_badge, providerBadge)
-            setTextViewText(R.id.notif_btn_play_pause, if (isPlaying) "Pause" else "Play")
 
-            setOnClickPendingIntent(R.id.notif_btn_play_pause, togglePi)
+            if (roundedArt != null) {
+                setImageViewBitmap(R.id.notif_expanded_art, roundedArt)
+            } else {
+                setImageViewResource(R.id.notif_expanded_art, R.drawable.ic_lyrics_notification)
+            }
+
             setOnClickPendingIntent(R.id.notif_expanded_root, openPi)
-
-            // Seek actions
-            syncState.previousLine?.let { prev ->
-                val prevPi = seekPendingIntent(prev.startMs, requestCode = 10)
-                setOnClickPendingIntent(R.id.notif_btn_prev, prevPi)
-            }
-            syncState.nextLine?.let { next ->
-                val nextPi = seekPendingIntent(next.startMs, requestCode = 11)
-                setOnClickPendingIntent(R.id.notif_btn_next, nextPi)
-            }
         }
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
@@ -209,7 +232,7 @@ class LyricsNotificationManager(private val context: Context) {
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setShowWhen(false)
     }
 
@@ -223,25 +246,21 @@ class LyricsNotificationManager(private val context: Context) {
         }.joinToString(" ")
     }
 
-    private fun seekPendingIntent(positionMs: Long, requestCode: Int): PendingIntent {
-        val intent = Intent(context, LyricaForegroundService::class.java).apply {
-            action = LyricaForegroundService.ACTION_SEEK
-            putExtra(LyricaForegroundService.EXTRA_SEEK_POSITION, positionMs)
-        }
-        return PendingIntent.getService(
-            context, requestCode, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
+    private fun getRoundedCornerBitmap(bitmap: Bitmap, cornerRadiusDp: Float): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val radiusPx = cornerRadiusDp * density
 
-    private fun togglePlayPendingIntent(): PendingIntent {
-        val intent = Intent(context, LyricaForegroundService::class.java).apply {
-            action = LyricaForegroundService.ACTION_TOGGLE_PLAY
-        }
-        return PendingIntent.getService(
-            context, 20, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val rect = Rect(0, 0, bitmap.width, bitmap.height)
+        val rectF = RectF(rect)
+
+        canvas.drawRoundRect(rectF, radiusPx, radiusPx, paint)
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(bitmap, rect, rect, paint)
+
+        return output
     }
 
     fun cancel() = nm.cancel(NOTIFICATION_ID)

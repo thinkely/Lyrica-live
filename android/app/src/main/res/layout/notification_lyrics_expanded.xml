@@ -10,120 +10,232 @@
     android:paddingEnd="12dp"
     android:paddingBottom="8dp">
 
-    <!-- 3-line lyrics container -->
+    <!-- Top Header: Album Art, App Brand & Track Info, Collapse Chevron -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <!-- Previous Line -->
-        <TextView
-            android:id="@+id/notif_expanded_prev_line"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text=""
-            android:textColor="#8E8E93"
-            android:textSize="12sp" />
+        <!-- Album Art -->
+        <ImageView
+            android:id="@+id/notif_expanded_art"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_album_art_rounded"
+            android:contentDescription="Album Art"
+            android:padding="2dp"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_lyrics_notification" />
 
-        <!-- Current Active Line (Apple Red) -->
-        <TextView
-            android:id="@+id/notif_expanded_current_line"
-            android:layout_width="match_parent"
+        <!-- Title & Artist -->
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:layout_marginBottom="3dp"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="♪ Searching for lyrics…"
-            android:textColor="#FA233B"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-        <!-- Next Line -->
-        <TextView
-            android:id="@+id/notif_expanded_next_line"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text=""
-            android:textColor="#8E8E93"
-            android:textSize="12sp" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="11dp"
+                    android:layout_height="11dp"
+                    android:contentDescription=""
+                    android:src="@drawable/ic_lyrica_badge" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Lyrica Live"
+                    android:textColor="#8E92A0"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/notif_expanded_track_info"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Karan Aujla — 7.7 Magnitude"
+                android:textColor="#8E92A0"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Collapse Chevron -->
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:contentDescription="Collapse"
+            android:src="@drawable/ic_chevron_up" />
     </LinearLayout>
 
-    <!-- Divider (Using ImageView as View is prohibited in RemoteViews) -->
+    <!-- Top Divider -->
     <ImageView
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginTop="6dp"
         android:layout_marginBottom="6dp"
-        android:background="#E5E5EA"
+        android:background="#262A38"
         android:contentDescription="" />
 
-    <!-- Actions Row: Prev | Play/Pause | Next | Mode indicator -->
+    <!-- Lyrics Body with Vertical Scrollbar track -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="32dp"
+        android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <!-- Prev Line Action -->
-        <TextView
-            android:id="@+id/notif_btn_prev"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:gravity="center_vertical"
-            android:paddingStart="4dp"
-            android:paddingEnd="10dp"
-            android:text="← Prev"
-            android:textColor="#FA233B"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-
-        <!-- Play / Pause Action -->
-        <TextView
-            android:id="@+id/notif_btn_play_pause"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:gravity="center_vertical"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:text="Pause"
-            android:textColor="#1C1C1E"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-
-        <!-- Next Line Action -->
-        <TextView
-            android:id="@+id/notif_btn_next"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:gravity="center_vertical"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:text="Next →"
-            android:textColor="#FA233B"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-
-        <!-- Spacer (Using TextView as View is prohibited in RemoteViews) -->
-        <TextView
+        <!-- Multi-line lyrics column -->
+        <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-        <!-- Translation / Romanization Mode Label -->
+            <!-- Previous Line (Muted) -->
+            <TextView
+                android:id="@+id/notif_expanded_line_prev"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingStart="12dp"
+                android:text=""
+                android:textColor="#8E92A0"
+                android:textSize="12.5sp" />
+
+            <!-- Active Line with Red Vertical Bar Indicator -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:layout_marginBottom="3dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <!-- Red/Pink Vertical Pill Indicator -->
+                <ImageView
+                    android:id="@+id/notif_active_bar"
+                    android:layout_width="3.5dp"
+                    android:layout_height="20dp"
+                    android:background="@drawable/bg_notification_active_indicator"
+                    android:contentDescription="" />
+
+                <!-- Active Line Text in Crisp Bold White -->
+                <TextView
+                    android:id="@+id/notif_expanded_line_curr"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8.5dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="♪ Waiting for music…"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Next Line 1 -->
+            <TextView
+                android:id="@+id/notif_expanded_line_next1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingStart="12dp"
+                android:text=""
+                android:textColor="#8E92A0"
+                android:textSize="12.5sp" />
+
+            <!-- Next Line 2 -->
+            <TextView
+                android:id="@+id/notif_expanded_line_next2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingStart="12dp"
+                android:text=""
+                android:textColor="#707482"
+                android:textSize="12sp" />
+
+            <!-- Next Line 3 -->
+            <TextView
+                android:id="@+id/notif_expanded_line_next3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingStart="12dp"
+                android:text=""
+                android:textColor="#585C6A"
+                android:textSize="11.5sp" />
+
+            <!-- Next Line 4 -->
+            <TextView
+                android:id="@+id/notif_expanded_line_next4"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingStart="12dp"
+                android:text=""
+                android:textColor="#454854"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Minimalist scrollbar pill indicator -->
+        <ImageView
+            android:layout_width="3dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
+            android:background="#2E3344"
+            android:contentDescription="" />
+    </LinearLayout>
+
+    <!-- Bottom Divider -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="4dp"
+        android:background="#262A38"
+        android:contentDescription="" />
+
+    <!-- Bottom Info: Provider Badge -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="20dp"
+        android:gravity="center_vertical|end"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:contentDescription=""
+            android:src="@drawable/ic_audio_wave" />
+
         <TextView
             android:id="@+id/notif_mode_badge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Original"
-            android:textColor="#8E8E93"
-            android:textSize="10sp"
+            android:layout_marginStart="5dp"
+            android:text="LRCLIB"
+            android:textColor="#8E92A0"
+            android:textSize="10.5sp"
             android:textStyle="bold" />
-
     </LinearLayout>
 
 </LinearLayout>

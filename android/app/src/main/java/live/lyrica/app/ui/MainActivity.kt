@@ -3,6 +3,7 @@ package live.lyrica.app.ui
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -16,6 +17,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -30,14 +32,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import live.lyrica.app.mediasession.LyricaMediaSessionListenerService
 import live.lyrica.app.provider.ProviderRegistry
+import live.lyrica.app.provider.impl.SpotifyLyricsProvider
 import live.lyrica.app.security.SecureTokenStorage
 import live.lyrica.app.service.LyricaForegroundService
+import live.lyrica.app.ui.components.AiSettingsDialog
+import live.lyrica.app.ui.components.CustomizationSettingsDialog
+import live.lyrica.app.ui.components.ManualLyricsSearchSheet
 
 class MainActivity : ComponentActivity() {
     private lateinit var storage: SecureTokenStorage
@@ -55,7 +64,8 @@ class MainActivity : ComponentActivity() {
                     isPermissionGranted = isPermissionGrantedState.value,
                     onGrantPermission = { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
                     onOpenFullLyrics  = { startActivity(Intent(this, FullLyricsActivity::class.java)) },
-                    onOpenDebugLogs   = { startActivity(Intent(this, DebugLogActivity::class.java)) }
+                    onOpenDebugLogs   = { startActivity(Intent(this, DebugLogActivity::class.java)) },
+                    onOpenSpotifyLogin = { startActivity(Intent(this, SpotifyLoginActivity::class.java)) }
                 )
             }
         }
@@ -105,17 +115,50 @@ fun MainScreen(
     isPermissionGranted: Boolean,
     onGrantPermission: () -> Unit,
     onOpenFullLyrics: () -> Unit,
-    onOpenDebugLogs: () -> Unit
+    onOpenDebugLogs: () -> Unit,
+    onOpenSpotifyLogin: () -> Unit
 ) {
-    val isRunning by LyricaForegroundService.isServiceRunningFlow.collectAsState()
-    val track     by LyricaForegroundService.currentQueryFlow.collectAsState()
-    val doc       by LyricaForegroundService.currentLyricsFlow.collectAsState()
-    val syncState by LyricaForegroundService.syncStateFlow.collectAsState()
-    val isPlaying by LyricaForegroundService.isPlayingFlow.collectAsState()
-    val status    by LyricaForegroundService.searchStatusFlow.collectAsState()
+    val isRunning  by LyricaForegroundService.isServiceRunningFlow.collectAsState()
+    val track      by LyricaForegroundService.currentQueryFlow.collectAsState()
+    val doc        by LyricaForegroundService.currentLyricsFlow.collectAsState()
+    val albumArt   by LyricaForegroundService.currentAlbumArtFlow.collectAsState()
+    val syncState  by LyricaForegroundService.syncStateFlow.collectAsState()
+    val isPlaying  by LyricaForegroundService.isPlayingFlow.collectAsState()
+    val status     by LyricaForegroundService.searchStatusFlow.collectAsState()
 
-    val wordLevel = remember { mutableStateOf(storage.getBoolean("word_level_sync", true)) }
     var showPermSteps by remember { mutableStateOf(false) }
+    var showManualSearch by remember { mutableStateOf(false) }
+    var showCustomization by remember { mutableStateOf(false) }
+    var showAiDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val aiService = remember { live.lyrica.app.ai.AiLyricsService(context) }
+
+    if (showManualSearch) {
+        ManualLyricsSearchSheet(
+            onDismiss = { showManualSearch = false },
+            onLyricsSelected = { query, selectedDoc ->
+                LyricaForegroundService.instance?.setManualLyrics(query, selectedDoc)
+                onOpenFullLyrics()
+            }
+        )
+    }
+
+    if (showCustomization) {
+        CustomizationSettingsDialog(
+            storage = storage,
+            onDismiss = { showCustomization = false },
+            onConnectSpotify = onOpenSpotifyLogin
+        )
+    }
+
+    if (showAiDialog) {
+        AiSettingsDialog(
+            aiService = aiService,
+            onDismiss = { showAiDialog = false },
+            onSaved = { showAiDialog = false }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -128,6 +171,12 @@ fun MainScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = { showManualSearch = true }) {
+                        Icon(Icons.Default.Search, contentDescription = "Search", tint = LabelPrimary)
+                    }
+                    IconButton(onClick = { showCustomization = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = LabelPrimary)
+                    }
                     IconButton(onClick = onOpenDebugLogs) {
                         Icon(Icons.Default.BugReport, contentDescription = "Debug", tint = SystemGray2)
                     }
@@ -148,7 +197,7 @@ fun MainScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ── 1. Permission Card (only shown when permission is actually NOT granted) ──
+            // ── 1. Permission Card (only shown when permission is NOT granted) ──
             AnimatedVisibility(!isPermissionGranted, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                 LyricaCard {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -231,21 +280,44 @@ fun MainScreen(
                             )
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     val currentTrack = track
                     if (currentTrack != null) {
-                        Text(
-                            currentTrack.rawTitle.ifBlank { currentTrack.title },
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = LabelPrimary
-                        )
-                        Text(
-                            currentTrack.rawArtist.ifBlank { currentTrack.artist },
-                            fontSize = 14.sp,
-                            color = LabelSecondary
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            // Rounded HD Album Art
+                            val art = albumArt
+                            if (art != null) {
+                                Image(
+                                    bitmap = art.asImageBitmap(),
+                                    contentDescription = "Album Art",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(54.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                )
+                                Spacer(Modifier.width(12.dp))
+                            }
+
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    currentTrack.rawTitle.ifBlank { currentTrack.title },
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = LabelPrimary,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    currentTrack.rawArtist.ifBlank { currentTrack.artist },
+                                    fontSize = 14.sp,
+                                    color = LabelSecondary,
+                                    maxLines = 1
+                                )
+                            }
+                        }
 
                         Spacer(Modifier.height(14.dp))
 
@@ -260,7 +332,7 @@ fun MainScreen(
                         ) {
                             AnimatedContent(
                                 targetState = syncState.currentLine?.text ?: when (status) {
-                                    "searching" -> "Searching in LRCLIB & LRCMux…"
+                                    "searching" -> "Searching lyrics across LRCLIB, Spotify & LRCMux…"
                                     "not_found" -> "No synchronized lyrics found"
                                     "found" -> "♪"
                                     else -> "♪"
@@ -296,26 +368,39 @@ fun MainScreen(
                         ) {
                             Icon(Icons.Default.Lyrics, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Full Lyrics", fontWeight = FontWeight.SemiBold)
+                            Text("Full Lyrics View", fontWeight = FontWeight.SemiBold)
                         }
                     } else {
-                        Text(
-                            if (isRunning) "No media playing — start any music app."
-                            else "Waiting for permission…",
-                            fontSize = 14.sp,
-                            color = LabelSecondary,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                            horizontalAlignment = Alignment.CenterAlignmentLine
+                        ) {
+                            Text(
+                                if (isRunning) "No media playing — start Spotify, YouTube Music, or any player."
+                                else "Waiting for permission…",
+                                fontSize = 14.sp,
+                                color = LabelSecondary,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = { showManualSearch = true },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Search Lyrics Manually", fontSize = 13.sp)
+                            }
+                        }
                     }
                 }
             }
 
-            // ── 3. Preferences ────────────────────────────────────────────
+            // ── 3. Quick Actions & Preferences Card ─────────────────────────
             LyricaCard {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "PREFERENCES",
+                        "FEATURES & PROVIDERS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = AppleRed,
@@ -324,49 +409,8 @@ fun MainScreen(
                     Spacer(Modifier.height(8.dp))
                     HorizontalDivider(color = Separator)
                     Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Word-level sync", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(
-                                "Karaoke-style word highlighting (LRCMux)",
-                                fontSize = 12.sp,
-                                color = LabelSecondary
-                            )
-                        }
-                        Switch(
-                            checked = wordLevel.value,
-                            onCheckedChange = {
-                                wordLevel.value = it
-                                storage.putBoolean("word_level_sync", it)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = AppleRed
-                            )
-                        )
-                    }
 
-                    Spacer(Modifier.height(8.dp))
-                    HorizontalDivider(color = Separator)
-                    Spacer(Modifier.height(8.dp))
-
-                    // AI Translation & Romanization section
-                    val context = androidx.compose.ui.platform.LocalContext.current
-                    val aiService = remember { live.lyrica.app.ai.AiLyricsService(context) }
-                    var showAiDialog by remember { mutableStateOf(false) }
-
-                    if (showAiDialog) {
-                        live.lyrica.app.ui.components.AiSettingsDialog(
-                            aiService = aiService,
-                            onDismiss = { showAiDialog = false },
-                            onSaved = { showAiDialog = false }
-                        )
-                    }
-
+                    // AI Translation & Romanize row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -398,8 +442,28 @@ fun MainScreen(
                     HorizontalDivider(color = Separator)
                     Spacer(Modifier.height(8.dp))
 
-                    // Provider status
-                    Text("Active Providers", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    // Customization / Settings shortcut
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showCustomization = true }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Customization & Kill Switch", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("Configure RAM kill switch, Spotify login, HD art, and sync offsets", fontSize = 12.sp, color = LabelSecondary)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = LabelTertiary)
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider(color = Separator)
+                    Spacer(Modifier.height(8.dp))
+
+                    // Active Providers List
+                    Text("Active Lyrics Providers", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(6.dp))
                     ProviderRegistry.getAll().forEach { provider ->
                         Row(

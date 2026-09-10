@@ -92,6 +92,7 @@ fun FullLyricsScreen(
     val context = LocalContext.current
     val track     by LyricaForegroundService.currentQueryFlow.collectAsState()
     val doc       by LyricaForegroundService.currentLyricsFlow.collectAsState()
+    val albumArt  by LyricaForegroundService.currentAlbumArtFlow.collectAsState()
     val syncState by LyricaForegroundService.syncStateFlow.collectAsState()
     val isPlaying by LyricaForegroundService.isPlayingFlow.collectAsState()
     val status    by LyricaForegroundService.searchStatusFlow.collectAsState()
@@ -197,20 +198,33 @@ fun FullLyricsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            track?.rawTitle?.ifBlank { track?.title ?: "Lyrics" } ?: "Lyrics",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = LabelPrimary,
-                            maxLines = 1
-                        )
-                        Text(
-                            track?.rawArtist?.ifBlank { track?.artist ?: "" } ?: "",
-                            fontSize = 12.sp,
-                            color = LabelSecondary,
-                            maxLines = 1
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val art = albumArt
+                        if (art != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = art.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                            )
+                            Spacer(Modifier.width(10.dp))
+                        }
+                        Column {
+                            Text(
+                                track?.rawTitle?.ifBlank { track?.title ?: "Lyrics" } ?: "Lyrics",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = LabelPrimary,
+                                maxLines = 1
+                            )
+                            Text(
+                                track?.rawArtist?.ifBlank { track?.artist ?: "" } ?: "",
+                                fontSize = 12.sp,
+                                color = LabelSecondary,
+                                maxLines = 1
+                            )
+                        }
                     }
                 },
                 navigationIcon = {

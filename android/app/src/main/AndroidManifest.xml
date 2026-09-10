@@ -32,6 +32,12 @@
             android:exported="false"
             android:theme="@style/Theme.LyricaLive" />
 
+        <!-- Spotify Login & Cookie Extractor -->
+        <activity
+            android:name=".ui.SpotifyLoginActivity"
+            android:exported="false"
+            android:theme="@style/Theme.LyricaLive" />
+
         <!-- Debug log viewer (testing only) -->
         <activity
             android:name=".ui.DebugLogActivity"
