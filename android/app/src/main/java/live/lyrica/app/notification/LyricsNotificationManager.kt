@@ -20,6 +20,7 @@ import live.lyrica.app.core.logging.LyricaLogger
 import live.lyrica.app.core.model.LyricsDocument
 import live.lyrica.app.core.model.TrackQuery
 import live.lyrica.app.engine.SyncState
+import live.lyrica.app.service.LyricaForegroundService
 import live.lyrica.app.ui.FullLyricsActivity
 
 /**
@@ -161,14 +162,18 @@ class LyricsNotificationManager(private val context: Context) {
             "Lyrica Live"
         }
 
-        val lines = doc?.lines ?: emptyList()
-        val idx = syncState.lineIndex
+        val prevLine = if (idx > 0 && idx < lines.size) lines[idx - 1] else null
+        val currLine = if (idx >= 0 && idx < lines.size) lines[idx] else null
+        val nextLine1 = if (idx >= 0 && idx + 1 < lines.size) lines[idx + 1] else if (idx < 0 && lines.isNotEmpty()) lines.getOrNull(0) else null
+        val nextLine2 = if (idx >= 0 && idx + 2 < lines.size) lines[idx + 2] else if (idx < 0 && lines.size > 1) lines.getOrNull(1) else null
+        val nextLine3 = if (idx >= 0 && idx + 3 < lines.size) lines[idx + 3] else if (idx < 0 && lines.size > 2) lines.getOrNull(2) else null
+        val nextLine4 = if (idx >= 0 && idx + 4 < lines.size) lines[idx + 4] else if (idx < 0 && lines.size > 3) lines.getOrNull(3) else null
 
-        val prevText = if (idx > 0 && idx < lines.size) lines[idx - 1].text else ""
-        val nextText1 = if (idx >= 0 && idx + 1 < lines.size) lines[idx + 1].text else if (idx < 0 && lines.isNotEmpty()) lines.getOrNull(0)?.text ?: "" else ""
-        val nextText2 = if (idx >= 0 && idx + 2 < lines.size) lines[idx + 2].text else if (idx < 0 && lines.size > 1) lines.getOrNull(1)?.text ?: "" else ""
-        val nextText3 = if (idx >= 0 && idx + 3 < lines.size) lines[idx + 3].text else if (idx < 0 && lines.size > 2) lines.getOrNull(2)?.text ?: "" else ""
-        val nextText4 = if (idx >= 0 && idx + 4 < lines.size) lines[idx + 4].text else if (idx < 0 && lines.size > 3) lines.getOrNull(3)?.text ?: "" else ""
+        val prevText = prevLine?.text ?: ""
+        val nextText1 = nextLine1?.text ?: ""
+        val nextText2 = nextLine2?.text ?: ""
+        val nextText3 = nextLine3?.text ?: ""
+        val nextText4 = nextLine4?.text ?: ""
 
         // Derive clean provider / mode badge
         val providerBadge = when {
@@ -207,7 +212,7 @@ class LyricsNotificationManager(private val context: Context) {
             setOnClickPendingIntent(R.id.notif_collapsed_root, openPi)
         }
 
-        // ── 2. Expanded RemoteViews (Multi-line preview) ─────────────────────
+        // ── 2. Expanded RemoteViews (Multi-line preview with in-line seek) ──
         val expandedViews = RemoteViews(context.packageName, R.layout.notification_lyrics_expanded).apply {
             setTextViewText(R.id.notif_expanded_track_info, trackInfo)
             setTextViewText(R.id.notif_expanded_line_prev, prevText)
@@ -224,7 +229,16 @@ class LyricsNotificationManager(private val context: Context) {
                 setImageViewResource(R.id.notif_expanded_art, R.drawable.ic_lyrics_notification)
             }
 
+            // Root click opens full screen lyrics activity
             setOnClickPendingIntent(R.id.notif_expanded_root, openPi)
+
+            // Direct line tapping seeks playback to that exact lyric timestamp!
+            prevLine?.let { setOnClickPendingIntent(R.id.notif_expanded_line_prev, createSeekPendingIntent(it.startMs, 101)) }
+            currLine?.let { setOnClickPendingIntent(R.id.notif_expanded_line_curr, createSeekPendingIntent(it.startMs, 102)) }
+            nextLine1?.let { setOnClickPendingIntent(R.id.notif_expanded_line_next1, createSeekPendingIntent(it.startMs, 103)) }
+            nextLine2?.let { setOnClickPendingIntent(R.id.notif_expanded_line_next2, createSeekPendingIntent(it.startMs, 104)) }
+            nextLine3?.let { setOnClickPendingIntent(R.id.notif_expanded_line_next3, createSeekPendingIntent(it.startMs, 105)) }
+            nextLine4?.let { setOnClickPendingIntent(R.id.notif_expanded_line_next4, createSeekPendingIntent(it.startMs, 106)) }
         }
 
         // NOTE: No DecoratedCustomViewStyle — that was causing the "notification inside
@@ -269,6 +283,19 @@ class LyricsNotificationManager(private val context: Context) {
         canvas.drawBitmap(bitmap, rect, rect, paint)
 
         return output
+    }
+
+    private fun createSeekPendingIntent(positionMs: Long, requestCode: Int): PendingIntent {
+        val intent = Intent(context, LyricaForegroundService::class.java).apply {
+            action = LyricaForegroundService.ACTION_SEEK
+            putExtra(LyricaForegroundService.EXTRA_SEEK_POSITION, positionMs)
+        }
+        return PendingIntent.getService(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     fun cancel() = nm.cancel(NOTIFICATION_ID)

@@ -69,10 +69,17 @@ object LyricsSyncEngine {
     }
 
     private fun findWordIndex(words: List<LyricWord>, positionMs: Long): Int {
+        if (words.isEmpty()) return -1
+        
         for (i in words.indices) {
-            if (positionMs in words[i].startMs until words[i].endMs) return i
+            val w = words[i]
+            val end = when {
+                w.endMs > w.startMs -> w.endMs
+                i + 1 < words.size && words[i + 1].startMs > w.startMs -> words[i + 1].startMs
+                else -> w.startMs + 400L
+            }
+            if (positionMs in w.startMs until end) return i
         }
-        // If past all words, return last word index (keep last word highlighted)
-        return if (words.isNotEmpty() && positionMs >= words.last().startMs) words.size - 1 else -1
+        return if (positionMs >= words.last().startMs) words.size - 1 else -1
     }
 }

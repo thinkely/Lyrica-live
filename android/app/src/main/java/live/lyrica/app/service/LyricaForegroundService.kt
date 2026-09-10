@@ -112,6 +112,9 @@ class LyricaForegroundService : Service() {
     private var lastPositionMs = 0L
 
     private val handler = Handler(Looper.getMainLooper())
+    private var lastNotifLineIdx = -99
+    private var lastNotifWordIdx = -99
+
     private val tickRunnable = object : Runnable {
         override fun run() {
             if (isPlaying && activeController != null) {
@@ -121,12 +124,27 @@ class LyricaForegroundService : Service() {
                 val doc = _currentLyricsFlow.value
                 val query = _currentQueryFlow.value
                 val art = _currentAlbumArtFlow.value
+                var interval = 200L
+
                 if (doc != null && query != null) {
                     val state = LyricsSyncEngine.resolveSyncState(doc, pos)
                     _syncStateFlow.value = state
-                    notifManager.update(query, doc, state, isPlaying, art)
+
+                    // If document supports word-level precision, run at high frequency (60ms)
+                    if (doc.hasWordSync) {
+                        interval = 60L
+                    }
+
+                    // Avoid spamming RemoteViews if neither line nor word changed
+                    val lineChanged = state.lineIndex != lastNotifLineIdx
+                    val wordChanged = doc.hasWordSync && state.wordIndex != lastNotifWordIdx
+                    if (lineChanged || wordChanged || lastNotifLineIdx == -99) {
+                        lastNotifLineIdx = state.lineIndex
+                        lastNotifWordIdx = state.wordIndex
+                        notifManager.update(query, doc, state, isPlaying, art)
+                    }
                 }
-                handler.postDelayed(this, 300L)
+                handler.postDelayed(this, interval)
             }
         }
     }

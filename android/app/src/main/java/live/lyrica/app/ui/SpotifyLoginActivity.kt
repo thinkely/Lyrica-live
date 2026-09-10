@@ -1,20 +1,24 @@
 package live.lyrica.app.ui
 
 import android.annotation.SuppressLint
-import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,7 +66,8 @@ fun SpotifyLoginScreen(
 ) {
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var capturedSpDc by remember { mutableStateOf<String?>(null) }
+    var showManualDialog by remember { mutableStateOf(false) }
+    var manualCookieText by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -79,6 +84,9 @@ fun SpotifyLoginScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showManualDialog = true }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Manual Token")
+                    }
                     IconButton(onClick = { webViewInstance?.reload() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reload")
                     }
@@ -94,6 +102,7 @@ fun SpotifyLoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(pad)
+                .background(Color(0xFF121212))
         ) {
             AndroidView(
                 factory = { ctx ->
@@ -101,17 +110,30 @@ fun SpotifyLoginScreen(
                         @SuppressLint("SetJavaScriptEnabled")
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
-                        settings.userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                        settings.databaseEnabled = true
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+                        settings.javaScriptCanOpenWindowsAutomatically = true
+                        settings.setSupportMultipleWindows(false)
+                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        settings.cacheMode = WebSettings.LOAD_DEFAULT
+                        // Modern Chrome User-Agent to ensure full compatibility with Spotify accounts
+                        settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
 
                         val cookieManager = CookieManager.getInstance()
                         cookieManager.setAcceptCookie(true)
                         cookieManager.setAcceptThirdPartyCookies(this, true)
 
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                if (newProgress >= 90) isLoading = false
+                            }
+                        }
+
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                 isLoading = true
                                 checkCookies(url, cookieManager) { spDc ->
-                                    capturedSpDc = spDc
                                     onLoginSuccess(spDc)
                                 }
                             }
@@ -119,7 +141,6 @@ fun SpotifyLoginScreen(
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 isLoading = false
                                 checkCookies(url, cookieManager) { spDc ->
-                                    capturedSpDc = spDc
                                     onLoginSuccess(spDc)
                                 }
                             }
@@ -127,14 +148,18 @@ fun SpotifyLoginScreen(
                             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                 val url = request?.url?.toString()
                                 checkCookies(url, cookieManager) { spDc ->
-                                    capturedSpDc = spDc
                                     onLoginSuccess(spDc)
                                 }
                                 return false
                             }
+
+                            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                                super.onReceivedError(view, request, error)
+                                LyricaLogger.w("SpotifyLogin", "WebView error: ${error?.description}")
+                            }
                         }
 
-                        loadUrl("https://accounts.spotify.com/en/login")
+                        loadUrl("https://accounts.spotify.com/login?continue=https%3A%2F%2Fopen.spotify.com%2F")
                         webViewInstance = this
                     }
                 },
@@ -150,19 +175,64 @@ fun SpotifyLoginScreen(
                 )
             }
         }
+
+        // Manual sp_dc cookie entry dialog fallback
+        if (showManualDialog) {
+            AlertDialog(
+                onDismissRequest = { showManualDialog = false },
+                title = { Text("Paste 'sp_dc' Cookie", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text(
+                            "If web login is blocked, you can extract the 'sp_dc' cookie from open.spotify.com and paste it here:",
+                            fontSize = 13.sp,
+                            color = LabelSecondary
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = manualCookieText,
+                            onValueChange = { manualCookieText = it },
+                            placeholder = { Text("sp_dc cookie value...") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val trimmed = manualCookieText.trim().removePrefix("sp_dc=").trim(';', ' ', '"')
+                            if (trimmed.isNotBlank()) {
+                                showManualDialog = false
+                                onLoginSuccess(trimmed)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DB954))
+                    ) {
+                        Text("Save & Connect")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showManualDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
     }
 }
 
 private fun checkCookies(url: String?, cookieManager: CookieManager, onFound: (String) -> Unit) {
     if (url == null) return
     val cookieStr = cookieManager.getCookie("https://open.spotify.com")
+        ?: cookieManager.getCookie("https://accounts.spotify.com")
         ?: cookieManager.getCookie("https://spotify.com")
         ?: cookieManager.getCookie(url) ?: return
 
     val cookies = cookieStr.split(";").map { it.trim() }
     for (cookie in cookies) {
         if (cookie.startsWith("sp_dc=")) {
-            val spDc = cookie.substringAfter("sp_dc=").trim()
+            val spDc = cookie.substringAfter("sp_dc=").trim().trim(';', ' ', '"')
             if (spDc.isNotBlank()) {
                 onFound(spDc)
                 return
